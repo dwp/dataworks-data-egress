@@ -20,7 +20,6 @@
         "s3SchemaVersion": "1.0",
         "configurationId": "tf-s3-queue-20201216163956982100000001",
         "bucket": {
-        "bucket": {
           "name": "13231",
           "ownerIdentity": {
             "principalId": "11111"

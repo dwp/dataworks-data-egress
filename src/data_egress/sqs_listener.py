@@ -8,10 +8,11 @@ import zlib
 import logging
 import re
 import boto3
-import sys
 from data_egress import logger_utils
 import argparse
+import json
 
+BODY = 'Body'
 DATA_ENCRYPTION_KEY_ID = "datakeyencryptionkeyid"
 CIPHER_TEXT = "ciphertext"
 IV = "iv"
@@ -51,39 +52,47 @@ class DynamoRecord:
         self.compression_fmt = compression_fmt
 
 
-def receive_message_from_sqs(args):
+def listen(args):
+    logger_utils.setup_logging(logger, args.log_level)
     sqs_client = get_client(service_name="sqs")
     while True:
         response = sqs_client.get_queue_attributes(
             QueueUrl=args.sqs_url, AttributeNames=["ApproximateNumberOfMessages"]
         )
-        available_msg_coumt = response["Attributes"]["ApproximateNumberOfMessages"]
-        if available_msg_coumt and available_msg_coumt > 0:
+        available_msg_count = int(response["Attributes"]["ApproximateNumberOfMessages"])
+        logger.info(f'available messages count: {available_msg_count}')
+        if available_msg_count and available_msg_count > 0:
             # TODO Recheck on the attribute names
             response = sqs_client.receive_message(
                 QueueUrl=args.sqs_url,
                 AttributeNames=["All"]
             )
-            s3_prefixes = process_messages(response)
-            s3prefix_and_dynamodb_records = query_dymodb(s3_prefixes)
-            dynamo_records = process_dynamo_db_response(s3_prefixes, s3prefix_and_dynamodb_records)
+            # TODO handle keyerror
+            messages = response["Messages"]
+            logger.info(f'Messages(s) received from queue: {json.dumps(messages)}')
+            s3_prefixes = process_messages(messages)
+            dynamodb = get_dynamodb_resource()
+            s3prefix_and_dynamodb_records = query_dynamodb(s3_prefixes, dynamodb)
+            dynamo_records = process_dynamo_db_response(s3prefix_and_dynamodb_records)
             start_processing(dynamo_records, args)
 
 
 # TODO More than one message wil be received in a single batch
-def process_messages(response):
+def process_messages(messages):
     """Processes response received from listening to sqs.
 
      Arguments:
-         response: Response received from sqs
+         messages: Response received from sqs
      """
     s3_prefixes = []
     s3_keys = []
     try:
-        records = response[KEY_RECORDS]
-        for record in records:
-            s3_key = record[KEY_S3][KEY_OBJECT][KEY_KEY]
-            s3_keys.append(s3_key)
+        for message in messages:
+            message_body = json.loads(message[BODY])
+            for event in message_body[KEY_RECORDS]:
+                s3_key = event[KEY_S3][KEY_OBJECT][KEY_KEY]
+                logger.info(f's3_key : {s3_key}')
+                s3_keys.append(s3_key)
     except Exception as ex:
         logger.error(
             f"Key: {str(ex)} not found when retrieving the prefix from sqs message"
@@ -100,19 +109,19 @@ def process_messages(response):
     return s3_prefixes
 
 
-def query_dymodb(s3_prefixes):
+def query_dynamodb(s3_prefixes, dynamodb):
     """Query  DynamoDb status table for a given correlation id.
 
     Arguments:
         s3_prefixes (string): source bucket prefixes to query dynamo db table
     """
-    dynamodb_client = get_client(service_name="dynamodb")
-    table = dynamodb_client.Table(DATA_EGRESS_DYNAMO_DB_TABLE)
+    table = dynamodb.Table(DATA_EGRESS_DYNAMO_DB_TABLE)
     s3prefix_and_dynamodb_records = []
     for s3_prefix in s3_prefixes:
-        response = table.query(KeyConditionExpression=Key("source_prefix").eq(s3_prefix))
-        S3PrefixAndDynamoRecord(s3_prefix, response["Items"])
-        s3prefix_and_dynamodb_records.append(S3PrefixAndDynamoRecord)
+        response = table.query(KeyConditionExpression=Key("pipeline_name").eq('OpsMI') & Key('source_prefix').eq(s3_prefix))
+        items = response["Items"]
+        logger.info(f'dynamodb items for {s3_prefix}: {items}')
+        s3prefix_and_dynamodb_records.append(S3PrefixAndDynamoRecord(s3_prefix, items))
     return s3prefix_and_dynamodb_records
 
 
@@ -123,8 +132,8 @@ def process_dynamo_db_response(s3prefix_and_dynamodb_records):
     s3prefix_and_dynamodb_records: List of records found in dynamo db for the query
     """
     for s3prefix_and_dynamodb_record in s3prefix_and_dynamodb_records:
-        records = s3prefix_and_dynamodb_record.dynamodb_records
         s3_prefix = s3prefix_and_dynamodb_record.s3_prefix
+        records = s3prefix_and_dynamodb_record.dynamodb_records
         if len(records) == 0:
             raise Exception(f"No records found in dynamo db for the s3_prefix {s3_prefix}")
         elif len(records) > 1:
@@ -274,6 +283,9 @@ def get_client(service_name):
     return client
 
 
+def get_dynamodb_resource():
+    return boto3.resource("dynamodb", region_name="eu-west-2")
+
 def parse_args():
     """Define and parse command line args."""
 
@@ -288,22 +300,12 @@ def parse_args():
     return parser.parse_args()
 
 
-def _main(args):
-    args = parse_args(args)
-    logger_utils.setup_logging(logger, args.log_level)
-    receive_message_from_sqs(args)
-
-
 def main():
-    """Start of CLI script.
-
-    This is called by setuptools entrypoint, so is not able to take any arguments.
-    In order to support automated testing of CLI parsing, this just wraps _main()
-    which enables args to be passed in.
-
-    """
-    _main(sys.argv[1:])
+    args = parse_args()
+    listen(args)
 
 
+# TODO how to run from command line argument if installed as python package
+# TODO why instance variable _sqs_client didnt work?
 if __name__ == "__main__":
     main()

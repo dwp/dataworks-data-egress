@@ -1,0 +1,4 @@
+setuptools==39.0.1
+boto3~=1.12.46
+requests==2.23.0
+pycryptodome >= 3.9.7
