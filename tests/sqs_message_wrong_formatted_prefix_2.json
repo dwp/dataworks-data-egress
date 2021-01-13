@@ -13,23 +13,24 @@
         "sourceIPAddress": "1.2.3.4"
       },
       "responseElements": {
-        "x-amz-request-id": "38EF7F69E8CCCA7A",
-        "x-amz-id-2": "JJsaS6W2dA2v0E+szo0+w5/pbNRm/MNYklgRq9QMzB2283Aygokyivw7OJpr+rMBDHKVyXQ7R36I6bgRhDQO5FePUPQ9YvJF"
+        "x-amz-request-id": "11111",
+        "x-amz-id-2": "1111111"
       },
       "s3": {
         "s3SchemaVersion": "1.0",
         "configurationId": "tf-s3-queue-20201216163956982100000001",
         "bucket": {
+        "bucket": {
           "name": "13231",
           "ownerIdentity": {
-            "principalId": "AFV26EDIWR5VR"
+            "principalId": "11111"
           },
           "arn": "arn:aws:s3:::13231"
         },
         "object": {
           "key": "data-egress-testing/pipeline_success.flag/2021-01-10",
           "size": 0,
-          "eTag": "b76e3e44a11f8548af45265279ee7980",
+          "eTag": "111111",
           "versionId": "HH0wWfYO0y1fbj3LHbbKnZwJlzlRKjIe",
           "sequencer": "005FF9DB6FE674793F"
         }
