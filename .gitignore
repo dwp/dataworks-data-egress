@@ -1,0 +1,24 @@
+**/.idea/
+**/.terraform/
+
+**/*.tfvars
+**/*.tfstate
+**/*.tfstate*
+
+terraform.tf
+aviator_pipeline.yml
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+build
+dist
+*egg-info

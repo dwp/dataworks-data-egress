@@ -1,0 +1,39 @@
+{
+  "Records": [
+    {
+      "eventVersion": "2.1",
+      "eventSource": "aws:s3",
+      "awsRegion": "eu-west-2",
+      "eventTime": "2021-01-09T16:35:53.896Z",
+      "eventName": "ObjectCreated:Put",
+      "userIdentity": {
+        "principalId": "AWS:abcbac:abcbac"
+      },
+      "requestParameters": {
+        "sourceIPAddress": "1.2.3.4"
+      },
+      "responseElements": {
+        "x-amz-request-id": "38EF7F69E8CCCA7A",
+        "x-amz-id-2": "JJsaS6W2dA2v0E+szo0+w5/pbNRm/MNYklgRq9QMzB2283Aygokyivw7OJpr+rMBDHKVyXQ7R36I6bgRhDQO5FePUPQ9YvJF"
+      },
+      "s3": {
+        "s3SchemaVersion": "1.0",
+        "configurationId": "tf-s3-queue-20201216163956982100000001",
+        "bucket": {
+          "name": "11211",
+          "ownerIdentity": {
+            "principalId": "AFV26EDIWR5VR"
+          },
+          "arn": "arn:aws:s3:::11211"
+        },
+        "object": {
+          "key": "data-egress-testing|2021-01-10|pipeline_success.flag",
+          "size": 0,
+          "eTag": "b76e3e44a11f8548af45265279ee7980",
+          "versionId": "HH0wWfYO0y1fbj3LHbbKnZwJlzlRKjIe",
+          "sequencer": "005FF9DB6FE674793F"
+        }
+      }
+    }
+  ]
+}
