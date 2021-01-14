@@ -1,16 +1,17 @@
-from boto3.dynamodb.conditions import Key
-import uuid
-import requests
+import argparse
 import base64
-from Crypto.Cipher import AES
-from Crypto.Util import Counter
-import zlib
+import json
 import logging
 import re
+import uuid
+import zlib
+
 import boto3
+import requests
+from Crypto.Cipher import AES
+from Crypto.Util import Counter
+from boto3.dynamodb.conditions import Key
 from data_egress import logger_utils
-import argparse
-import json
 
 BODY = 'Body'
 DATA_ENCRYPTION_KEY_ID = "datakeyencryptionkeyid"
@@ -30,8 +31,8 @@ DYNAMO_DB_ITEM_DESTINATION_BUCKET = "destination_bucket"
 DYNAMO_DB_ITEM_SOURCE_PREFIX = "source_prefix"
 DYNAMO_DB_ITEM_DESTINATION_PREFIX = "destination_prefix"
 DYNAMO_DB_ITEM_TRANSFER_TYPE = "transfer_type"
-S3_TRANSFER_TYPE = "s3"
-keys_map = []
+S3_TRANSFER_TYPE = "S3"
+keys_map = {}
 
 logger = logging.getLogger("sqs_listener")
 
@@ -43,16 +44,15 @@ class S3PrefixAndDynamoRecord:
 
 
 class DynamoRecord:
-    def __init__(self, source_bucket, source_prefix, destination_bucket, destination_prefix, transfer_type, compression_fmt):
+    def __init__(self, source_bucket, source_prefix, destination_bucket, destination_prefix, transfer_type):
         self.source_bucket = source_bucket
         self.source_prefix = source_prefix
         self.destination_bucket = destination_bucket
         self.destination_prefix = destination_prefix
         self.transfer_type = transfer_type
-        self.compression_fmt = compression_fmt
 
 
-def listen(args):
+def listen(args, s3_client):
     logger_utils.setup_logging(logger, args.log_level)
     sqs_client = get_client(service_name="sqs")
     while True:
@@ -74,7 +74,9 @@ def listen(args):
             dynamodb = get_dynamodb_resource()
             s3prefix_and_dynamodb_records = query_dynamodb(s3_prefixes, dynamodb)
             dynamo_records = process_dynamo_db_response(s3prefix_and_dynamodb_records)
-            start_processing(dynamo_records, args)
+            start_processing(s3_client, dynamo_records, args)
+            if args.is_test:
+                break;
 
 
 # TODO More than one message wil be received in a single batch
@@ -145,10 +147,12 @@ def process_dynamo_db_response(s3prefix_and_dynamodb_records):
                 source_bucket = record[DYNAMO_DB_ITEM_SOURCE_BUCKET]
                 source_prefix = record[DYNAMO_DB_ITEM_SOURCE_PREFIX]
                 transfer_type = record[DYNAMO_DB_ITEM_TRANSFER_TYPE]
+                logger.info(f'so ooo {source_bucket} {source_prefix}')
                 if transfer_type == S3_TRANSFER_TYPE:
                     destination_bucket = record[DYNAMO_DB_ITEM_DESTINATION_BUCKET]
                     destination_prefix = record[DYNAMO_DB_ITEM_DESTINATION_PREFIX]
                     dynamo_records.append(DynamoRecord(source_bucket, source_prefix, destination_bucket, destination_prefix, transfer_type))
+                    logger.info(f'fffff {dynamo_records}')
                     return dynamo_records
             except Exception as ex:
                 logger.error(
@@ -159,12 +163,11 @@ def process_dynamo_db_response(s3prefix_and_dynamodb_records):
                 )
 
 
-def start_processing(dynamo_records, args):
-    s3_client = get_client(service="s3")
+def start_processing(s3_client, dynamo_records, args):
     for dynamo_record in dynamo_records:
         source_bucket = dynamo_record.source_bucket
         source_prefix = dynamo_record.source_prefix
-        keys = get_all_s3_keys(source_bucket, source_prefix)
+        keys = get_all_s3_keys(s3_client, source_bucket, source_prefix)
         for key in keys:
             s3_object = s3_client.get_object(Bucket=source_bucket, Key=key)
             iv = s3_object[METADATA][IV]
@@ -174,22 +177,21 @@ def start_processing(dynamo_records, args):
                 ciphertext, datakeyencryptionkeyid, args
             )
             streaming_data = s3_client.get_object(Bucket=source_bucket, Key=key)["Body"]
-            decrypted_stream = decrypt(plain_text_key, iv, streaming_data)
-            compress(decrypted_stream)
-            credentials_dict = assume_role()
-            boto3.session.Session(
-                aws_access_key_id=credentials_dict["AccessKeyId"],
-                aws_secret_access_key=credentials_dict["SecretAccessKey"],
-                aws_session_token=credentials_dict["SessionToken"],
-            )
+            decrypted = decrypt(plain_text_key, iv, streaming_data)
+            #compress(decrypted_stream)
+            # credentials_dict = assume_role()
+            # boto3.session.Session(
+            #     aws_access_key_id=credentials_dict["AccessKeyId"],
+            #     aws_secret_access_key=credentials_dict["SecretAccessKey"],
+            #     aws_session_token=credentials_dict["SessionToken"],
+            # )
             file_name = key.replace(source_prefix, "")
             destination_bucket = dynamo_record.destination_bucket
             destination_prefix = dynamo_record.destination_prefix
-            save(s3_client, file_name, destination_bucket, destination_prefix)
+            save(s3_client, file_name, destination_bucket, destination_prefix, decrypted)
 
 
-def get_all_s3_keys(source_bucket, source_prefix):
-    s3_client = get_client(service="s3")
+def get_all_s3_keys(s3_client, source_bucket, source_prefix):
     keys = []
     paginator = s3_client.get_paginator("list_objects_v2")
     pages = paginator.paginate(Bucket=source_bucket, Prefix=source_prefix)
@@ -203,7 +205,7 @@ def get_plaintext_key_calling_dks(encryptedkey, keyencryptionkeyid, args):
     if keys_map.get(encryptedkey):
         key = keys_map[encryptedkey]
     else:
-        key = call_dks(encryptedkey, keyencryptionkeyid)
+        key = call_dks(encryptedkey, keyencryptionkeyid, args)
         keys_map[encryptedkey] = key
     return key
 
@@ -233,25 +235,23 @@ def decrypt(plain_text_key, iv_key, data):
         iv_int = int(base64.b64decode(iv_key).hex(), 16)
         ctr = Counter.new(AES.block_size * 8, initial_value=iv_int)
         aes = AES.new(base64.b64decode(plain_text_key), AES.MODE_CTR, counter=ctr)
-        decrypted = aes.decrypt(data)
+        decrypted = aes.decrypt(data.read())
+        return decrypted
     except BaseException as ex:
         logger.error(f"Problem decrypting data {str(ex)}")
-    return decrypted
 
 
 def compress(decrypted_stream):
+    logger.info(f'decrypted: {decrypted_stream}')
     return zlib.compress(decrypted_stream, 16 + zlib.MAX_WBITS)
 
 
 # TODO make comepression format dynamic
-def save(s3_client, file_name, destination_bucket, destination_prefix):
-    with open(file_name, "rb") as data:
-        s3_client.upload_fileobj(
-            data,
-            destination_bucket,
-            f"{destination_prefix}/{file_name}.gz",
-            ExtraArgs={"Metadata": ""},
-        )
+def save(s3_client, file_name, destination_bucket, destination_prefix, data):
+        s3_client.put_object(
+            Body=data,
+            Bucket=destination_bucket,
+            Key=f"{destination_prefix}/{file_name}.gz")
 
 
 def assume_role():
@@ -285,6 +285,15 @@ def get_client(service_name):
 
 def get_dynamodb_resource():
     return boto3.resource("dynamodb", region_name="eu-west-2")
+
+
+def get_s3_client():
+    return boto3.client('s3')
+
+
+def get_s3_resource():
+    return boto3.resource("s3", region_name="${aws_default_region}")
+
 
 def parse_args():
     """Define and parse command line args."""

@@ -7,6 +7,19 @@ import boto3
 import argparse
 import logging
 
+from Crypto import Random
+from Crypto.Cipher import AES
+from Crypto.Util import Counter
+import base64
+import binascii
+
+MOTO_SERVER_URL = "http://127.0.0.1:5000"
+SOURCE_PREFIX = "data-egress-testing/2021-01-10/"
+RECIPIENT_NAME = "OpsMI"
+S3_TRANSFER_TYPE = "S3"
+DESTINATION_BUCKET = "4321"
+SOURCE_BUCKET = "1234"
+DESTINATION_PREFIX = "output/"
 AWS_REGION = "eu-west-2"
 DYNAMODB_TABLENAME = "data-egress"
 HASH_KEY = "pipeline_name"
@@ -65,8 +78,10 @@ def test_process_dynamo_db_response_2():
         sqs_listener.process_dynamo_db_response(records)
     assert str(ex.value) == '"Key: \'source_bucket\' not found when retrieving from dynamodb response"'
 
+
 @mock_sqs
 @mock_dynamodb2
+@mock_s3
 def test_all(monkeypatch):
     sqs_client = boto3.client('sqs')
     json_file = open('/Users/udaykiranchokkam/DWP-Workspace/dataworks-data-egress/tests/sqs_message.json')
@@ -76,7 +91,8 @@ def test_all(monkeypatch):
     args.sqs_url = mock_get_sqs_resource().url
     sqs_client.send_message(QueueUrl=args.sqs_url, MessageBody=msg_json_str)
     monkeypatch.setattr(sqs_listener, "get_dynamodb_resource", mock_get_dynamodb_resource)
-    sqs_listener.listen(args)
+    monkeypatch.setattr(sqs_listener, "call_dks", mock_call_dks)
+    sqs_listener.listen(args, mock_get_s3_client())
 
 @mock_sqs
 def mock_get_sqs_resource():
@@ -101,17 +117,50 @@ def mock_get_dynamodb_resource():
         ],
         ProvisionedThroughput={"ReadCapacityUnits": 10, "WriteCapacityUnits": 10},
     )
-    table.put_item(Item={HASH_KEY: "OpsMI", RANGE_KEY: "data-egress-testing/2021-01-10/",
-                         'source_bucket': "1234", 'destination_bucket': "1234", 'destination_prefix': "output/", 'transfer_type': "S3", 'recipient_name': "OpsMI"})
+    table.put_item(Item={HASH_KEY: RECIPIENT_NAME, RANGE_KEY: SOURCE_PREFIX,
+                         'source_bucket': SOURCE_BUCKET, 'destination_bucket': DESTINATION_BUCKET, 'destination_prefix': DESTINATION_PREFIX, 'transfer_type': S3_TRANSFER_TYPE, 'recipient_name': RECIPIENT_NAME})
     return dynamodb
+
+
+@mock_s3
+def mock_get_s3_client():
+    s3_client = boto3.client(service_name="s3", region_name='us-east-1')
+    s3_client.create_bucket(Bucket=SOURCE_BUCKET)
+    s3_client.create_bucket(Bucket=DESTINATION_BUCKET)
+    encrypted = encrypt_data("test_data")
+    print(f'encrypted: {encrypted}')
+    s3_client.put_object(
+        Body=encrypted,
+        Bucket=SOURCE_BUCKET,
+        Key=f"{SOURCE_PREFIX}/some_file.enc",
+        Metadata={
+            "iv": "BDva/T7HssDYMtyLfn/afw==",
+            "ciphertext": "test_ciphertext",
+            "datakeyencryptionkeyid": "123",
+        }
+    )
+    return s3_client
+
+
+def encrypt_data(data):
+    return encrypt(5627699127241421480342634160438893183, 'UBkbtizlrjYs5kZch3CwCg==', data.encode())
+
+
+def encrypt(initialisation_vector, datakey, unencrypted_bytes):
+    counter = Counter.new(AES.block_size * 8, initial_value=initialisation_vector)
+    aes = AES.new(base64.b64decode(datakey), AES.MODE_CTR, counter=counter)
+    return aes.encrypt(unencrypted_bytes)
+
 
 def mock_args():
     args = argparse.Namespace()
     args.log_level = logging.INFO
+    args.is_test = True
     return args
 
 
-
+def mock_call_dks(cek, kek, args):
+    return 'UBkbtizlrjYs5kZch3CwCg=='
 
 
 
