@@ -12,6 +12,14 @@ env:
   IMAGE_NAME: dwpdigital/dataworks-data-egress
 
 jobs:
+  build-app:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@master
+      - name: tests
+        run: |
+          make tests
+
   get-publish-version:
     runs-on: ubuntu-latest
     outputs:
