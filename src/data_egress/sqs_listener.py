@@ -28,6 +28,8 @@ REGEX_PATTERN = r"^[\w\/-]*pipeline_success.flag$"
 DATA_EGRESS_DYNAMO_DB_TABLE = "data-egress"
 DYNAMO_DB_ITEM_SOURCE_BUCKET = "source_bucket"
 DYNAMO_DB_ITEM_DESTINATION_BUCKET = "destination_bucket"
+DYNAMO_DB_ITEM_COMPRESS = "compress"
+DYNAMO_DB_ITEM_COMPRESSION_FMT = "compression_fmt"
 DYNAMO_DB_ITEM_SOURCE_PREFIX = "source_prefix"
 DYNAMO_DB_ITEM_DESTINATION_PREFIX = "destination_prefix"
 DYNAMO_DB_ITEM_TRANSFER_TYPE = "transfer_type"
@@ -44,12 +46,14 @@ class S3PrefixAndDynamoRecord:
 
 
 class DynamoRecord:
-    def __init__(self, source_bucket, source_prefix, destination_bucket, destination_prefix, transfer_type):
+    def __init__(self, source_bucket, source_prefix, destination_bucket, destination_prefix, transfer_type, compress, compression_fmt):
         self.source_bucket = source_bucket
         self.source_prefix = source_prefix
         self.destination_bucket = destination_bucket
         self.destination_prefix = destination_prefix
         self.transfer_type = transfer_type
+        self.compress = compress
+        self.compression_fmt = compression_fmt
 
 
 def listen(args, s3_client):
@@ -151,7 +155,9 @@ def process_dynamo_db_response(s3prefix_and_dynamodb_records):
                 if transfer_type == S3_TRANSFER_TYPE:
                     destination_bucket = record[DYNAMO_DB_ITEM_DESTINATION_BUCKET]
                     destination_prefix = record[DYNAMO_DB_ITEM_DESTINATION_PREFIX]
-                    dynamo_records.append(DynamoRecord(source_bucket, source_prefix, destination_bucket, destination_prefix, transfer_type))
+                    compress = record[DYNAMO_DB_ITEM_COMPRESS]
+                    compression_fmt = record[DYNAMO_DB_ITEM_COMPRESSION_FMT]
+                    dynamo_records.append(DynamoRecord(source_bucket, source_prefix, destination_bucket, destination_prefix, transfer_type, compress, compression_fmt))
                     logger.info(f'fffff {dynamo_records}')
                     return dynamo_records
             except Exception as ex:
@@ -177,8 +183,9 @@ def start_processing(s3_client, dynamo_records, args):
                 ciphertext, datakeyencryptionkeyid, args
             )
             streaming_data = s3_client.get_object(Bucket=source_bucket, Key=key)["Body"]
-            decrypted = decrypt(plain_text_key, iv, streaming_data)
-            #compress(decrypted_stream)
+            data = decrypt(plain_text_key, iv, streaming_data)
+            if dynamo_record.compress:
+                data = compress(data)
             # credentials_dict = assume_role()
             # boto3.session.Session(
             #     aws_access_key_id=credentials_dict["AccessKeyId"],
@@ -186,9 +193,11 @@ def start_processing(s3_client, dynamo_records, args):
             #     aws_session_token=credentials_dict["SessionToken"],
             # )
             file_name = key.replace(source_prefix, "")
+            file_name_without_enc = file_name.replace(".enc", "")
             destination_bucket = dynamo_record.destination_bucket
             destination_prefix = dynamo_record.destination_prefix
-            save(s3_client, file_name, destination_bucket, destination_prefix, decrypted)
+            logger.info(f'compresssssed : {data}')
+            save(s3_client, file_name_without_enc, destination_bucket, destination_prefix, data)
 
 
 def get_all_s3_keys(s3_client, source_bucket, source_prefix):
@@ -241,17 +250,20 @@ def decrypt(plain_text_key, iv_key, data):
         logger.error(f"Problem decrypting data {str(ex)}")
 
 
-def compress(decrypted_stream):
-    logger.info(f'decrypted: {decrypted_stream}')
-    return zlib.compress(decrypted_stream, 16 + zlib.MAX_WBITS)
+def compress(decrypted):
+    logger.info(f'decrypted: {decrypted}')
+    return zlib.compressobj(decrypted)
 
 
 # TODO make comepression format dynamic
 def save(s3_client, file_name, destination_bucket, destination_prefix, data):
-        s3_client.put_object(
+    try:
+        response = s3_client.put_object(
             Body=data,
             Bucket=destination_bucket,
-            Key=f"{destination_prefix}/{file_name}.gz")
+            Key=f"{destination_prefix}{file_name}.gz")
+    except Exception as ex:
+        logger.error(f'Exception while saving {str(ex)}')
 
 
 def assume_role():

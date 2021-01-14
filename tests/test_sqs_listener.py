@@ -6,6 +6,7 @@ from moto import mock_s3, mock_dynamodb2, mock_sqs
 import boto3
 import argparse
 import logging
+import zlib
 
 from Crypto import Random
 from Crypto.Cipher import AES
@@ -92,7 +93,12 @@ def test_all(monkeypatch):
     sqs_client.send_message(QueueUrl=args.sqs_url, MessageBody=msg_json_str)
     monkeypatch.setattr(sqs_listener, "get_dynamodb_resource", mock_get_dynamodb_resource)
     monkeypatch.setattr(sqs_listener, "call_dks", mock_call_dks)
-    sqs_listener.listen(args, mock_get_s3_client())
+    s3_client = mock_get_s3_client()
+    sqs_listener.listen(args, s3_client)
+    compressed_data = s3_client.get_object(Bucket=DESTINATION_BUCKET, Key=f'{DESTINATION_PREFIX}some_file.gz')["Body"].read()
+    print(f'compressed datataa : {compressed_data}')
+    decompressed = decompress(compressed_data)
+    assert decompressed == 'test_data'
 
 @mock_sqs
 def mock_get_sqs_resource():
@@ -118,7 +124,8 @@ def mock_get_dynamodb_resource():
         ProvisionedThroughput={"ReadCapacityUnits": 10, "WriteCapacityUnits": 10},
     )
     table.put_item(Item={HASH_KEY: RECIPIENT_NAME, RANGE_KEY: SOURCE_PREFIX,
-                         'source_bucket': SOURCE_BUCKET, 'destination_bucket': DESTINATION_BUCKET, 'destination_prefix': DESTINATION_PREFIX, 'transfer_type': S3_TRANSFER_TYPE, 'recipient_name': RECIPIENT_NAME})
+                         'source_bucket': SOURCE_BUCKET, 'destination_bucket': DESTINATION_BUCKET, 'destination_prefix': DESTINATION_PREFIX, 'transfer_type': S3_TRANSFER_TYPE, 'recipient_name': RECIPIENT_NAME
+                         ,'compress': True, 'compression_fmt': 'gzip'})
     return dynamodb
 
 
@@ -132,7 +139,7 @@ def mock_get_s3_client():
     s3_client.put_object(
         Body=encrypted,
         Bucket=SOURCE_BUCKET,
-        Key=f"{SOURCE_PREFIX}/some_file.enc",
+        Key=f"{SOURCE_PREFIX}some_file.enc",
         Metadata={
             "iv": "BDva/T7HssDYMtyLfn/afw==",
             "ciphertext": "test_ciphertext",
@@ -140,6 +147,10 @@ def mock_get_s3_client():
         }
     )
     return s3_client
+
+
+def decompress(data):
+    return zlib.decompress(data, 16 + zlib.MAX_WBITS)
 
 
 def encrypt_data(data):
