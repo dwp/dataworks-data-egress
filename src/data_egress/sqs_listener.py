@@ -13,7 +13,7 @@ from Crypto.Util import Counter
 from boto3.dynamodb.conditions import Key
 from data_egress import logger_utils
 
-BODY = 'Body'
+BODY = "Body"
 DATA_ENCRYPTION_KEY_ID = "datakeyencryptionkeyid"
 CIPHER_TEXT = "ciphertext"
 IV = "iv"
@@ -46,7 +46,16 @@ class S3PrefixAndDynamoRecord:
 
 
 class DynamoRecord:
-    def __init__(self, source_bucket, source_prefix, destination_bucket, destination_prefix, transfer_type, compress, compression_fmt):
+    def __init__(
+        self,
+        source_bucket,
+        source_prefix,
+        destination_bucket,
+        destination_prefix,
+        transfer_type,
+        compress,
+        compression_fmt,
+    ):
         self.source_bucket = source_bucket
         self.source_prefix = source_prefix
         self.destination_bucket = destination_bucket
@@ -64,32 +73,31 @@ def listen(args, s3_client):
             QueueUrl=args.sqs_url, AttributeNames=["ApproximateNumberOfMessages"]
         )
         available_msg_count = int(response["Attributes"]["ApproximateNumberOfMessages"])
-        logger.info(f'available messages count: {available_msg_count}')
+        logger.info(f"available messages count: {available_msg_count}")
         if available_msg_count and available_msg_count > 0:
             # TODO Recheck on the attribute names
             response = sqs_client.receive_message(
-                QueueUrl=args.sqs_url,
-                AttributeNames=["All"]
+                QueueUrl=args.sqs_url, AttributeNames=["All"]
             )
             # TODO handle keyerror
             messages = response["Messages"]
-            logger.info(f'Messages(s) received from queue: {json.dumps(messages)}')
+            logger.info(f"Messages(s) received from queue: {json.dumps(messages)}")
             s3_prefixes = process_messages(messages)
             dynamodb = get_dynamodb_resource()
             s3prefix_and_dynamodb_records = query_dynamodb(s3_prefixes, dynamodb)
             dynamo_records = process_dynamo_db_response(s3prefix_and_dynamodb_records)
             start_processing(s3_client, dynamo_records, args)
             if args.is_test:
-                break;
+                break
 
 
 # TODO More than one message wil be received in a single batch
 def process_messages(messages):
     """Processes response received from listening to sqs.
 
-     Arguments:
-         messages: Response received from sqs
-     """
+    Arguments:
+        messages: Response received from sqs
+    """
     s3_prefixes = []
     s3_keys = []
     try:
@@ -97,7 +105,7 @@ def process_messages(messages):
             message_body = json.loads(message[BODY])
             for event in message_body[KEY_RECORDS]:
                 s3_key = event[KEY_S3][KEY_OBJECT][KEY_KEY]
-                logger.info(f's3_key : {s3_key}')
+                logger.info(f"s3_key : {s3_key}")
                 s3_keys.append(s3_key)
     except Exception as ex:
         logger.error(
@@ -124,9 +132,12 @@ def query_dynamodb(s3_prefixes, dynamodb):
     table = dynamodb.Table(DATA_EGRESS_DYNAMO_DB_TABLE)
     s3prefix_and_dynamodb_records = []
     for s3_prefix in s3_prefixes:
-        response = table.query(KeyConditionExpression=Key("pipeline_name").eq('OpsMI') & Key('source_prefix').eq(s3_prefix))
+        response = table.query(
+            KeyConditionExpression=Key("pipeline_name").eq("OpsMI")
+            & Key("source_prefix").eq(s3_prefix)
+        )
         items = response["Items"]
-        logger.info(f'dynamodb items for {s3_prefix}: {items}')
+        logger.info(f"dynamodb items for {s3_prefix}: {items}")
         s3prefix_and_dynamodb_records.append(S3PrefixAndDynamoRecord(s3_prefix, items))
     return s3prefix_and_dynamodb_records
 
@@ -141,7 +152,9 @@ def process_dynamo_db_response(s3prefix_and_dynamodb_records):
         s3_prefix = s3prefix_and_dynamodb_record.s3_prefix
         records = s3prefix_and_dynamodb_record.dynamodb_records
         if len(records) == 0:
-            raise Exception(f"No records found in dynamo db for the s3_prefix {s3_prefix}")
+            raise Exception(
+                f"No records found in dynamo db for the s3_prefix {s3_prefix}"
+            )
         elif len(records) > 1:
             raise Exception(f"More than 1 record for the s3_prefix {s3_prefix}")
         else:
@@ -151,14 +164,24 @@ def process_dynamo_db_response(s3prefix_and_dynamodb_records):
                 source_bucket = record[DYNAMO_DB_ITEM_SOURCE_BUCKET]
                 source_prefix = record[DYNAMO_DB_ITEM_SOURCE_PREFIX]
                 transfer_type = record[DYNAMO_DB_ITEM_TRANSFER_TYPE]
-                logger.info(f'so ooo {source_bucket} {source_prefix}')
+                logger.info(f"so ooo {source_bucket} {source_prefix}")
                 if transfer_type == S3_TRANSFER_TYPE:
                     destination_bucket = record[DYNAMO_DB_ITEM_DESTINATION_BUCKET]
                     destination_prefix = record[DYNAMO_DB_ITEM_DESTINATION_PREFIX]
                     compress = record[DYNAMO_DB_ITEM_COMPRESS]
                     compression_fmt = record[DYNAMO_DB_ITEM_COMPRESSION_FMT]
-                    dynamo_records.append(DynamoRecord(source_bucket, source_prefix, destination_bucket, destination_prefix, transfer_type, compress, compression_fmt))
-                    logger.info(f'fffff {dynamo_records}')
+                    dynamo_records.append(
+                        DynamoRecord(
+                            source_bucket,
+                            source_prefix,
+                            destination_bucket,
+                            destination_prefix,
+                            transfer_type,
+                            compress,
+                            compression_fmt,
+                        )
+                    )
+                    logger.info(f"fffff {dynamo_records}")
                     return dynamo_records
             except Exception as ex:
                 logger.error(
@@ -196,8 +219,14 @@ def start_processing(s3_client, dynamo_records, args):
             file_name_without_enc = file_name.replace(".enc", "")
             destination_bucket = dynamo_record.destination_bucket
             destination_prefix = dynamo_record.destination_prefix
-            logger.info(f'compresssssed : {data}')
-            save(s3_client, file_name_without_enc, destination_bucket, destination_prefix, data)
+            logger.info(f"compresssssed : {data}")
+            save(
+                s3_client,
+                file_name_without_enc,
+                destination_bucket,
+                destination_prefix,
+                data,
+            )
 
 
 def get_all_s3_keys(s3_client, source_bucket, source_prefix):
@@ -251,7 +280,7 @@ def decrypt(plain_text_key, iv_key, data):
 
 
 def compress(decrypted):
-    logger.info(f'decrypted: {decrypted}')
+    logger.info(f"decrypted: {decrypted}")
     compress = zlib.compressobj(9, zlib.DEFLATED, 16 + zlib.MAX_WBITS)
     compressed_data = compress.compress(decrypted)
     compressed_data += compress.flush()
@@ -264,9 +293,10 @@ def save(s3_client, file_name, destination_bucket, destination_prefix, data):
         response = s3_client.put_object(
             Body=data,
             Bucket=destination_bucket,
-            Key=f"{destination_prefix}{file_name}.gz")
+            Key=f"{destination_prefix}{file_name}.gz",
+        )
     except Exception as ex:
-        logger.error(f'Exception while saving {str(ex)}')
+        logger.error(f"Exception while saving {str(ex)}")
 
 
 def assume_role():
@@ -286,9 +316,10 @@ def assume_role():
     sts_client = boto3_session.client("sts")
     assume_role_dict = {}
     sts_client.assume_role(
-    RoleArn=aws_role_arn,
-    RoleSessionName=f"{session_name}",
-    DurationSeconds=int(aws_session_timeout_seconds)),
+        RoleArn=aws_role_arn,
+        RoleSessionName=f"{session_name}",
+        DurationSeconds=int(aws_session_timeout_seconds),
+    ),
 
     return assume_role_dict["Credentials"]
 
@@ -303,7 +334,7 @@ def get_dynamodb_resource():
 
 
 def get_s3_client():
-    return boto3.client('s3')
+    return boto3.client("s3")
 
 
 def get_s3_resource():
@@ -314,7 +345,7 @@ def parse_args():
     """Define and parse command line args."""
 
     parser = argparse.ArgumentParser(
-    description="Receive args provided to spark submit job"
+        description="Receive args provided to spark submit job"
     )
 
     # Parse command line inputs and set defaults
