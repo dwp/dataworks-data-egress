@@ -10,11 +10,7 @@ setuptools.setup(
     description="data_egress",
     long_description="data_egress",
     long_description_content_type="text/markdown",
-    entry_points={
-        "console_scripts": [
-            "sqs-listener=data_egress.sqs_listener:main"
-        ]
-    },
+    entry_points={"console_scripts": ["sqs-listener=data_egress.sqs_listener:main"]},
     package_dir={"": "src"},
     packages=setuptools.find_packages("src"),
     install_requires=["boto3", "requests", "pycryptodome"],
