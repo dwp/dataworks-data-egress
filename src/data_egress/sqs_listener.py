@@ -252,7 +252,10 @@ def decrypt(plain_text_key, iv_key, data):
 
 def compress(decrypted):
     logger.info(f'decrypted: {decrypted}')
-    return zlib.compressobj(decrypted)
+    compress = zlib.compressobj(9, zlib.DEFLATED, 16 + zlib.MAX_WBITS)
+    compressed_data = compress.compress(decrypted)
+    compressed_data += compress.flush()
+    return compressed_data
 
 
 # TODO make comepression format dynamic

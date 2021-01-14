@@ -97,7 +97,7 @@ def test_all(monkeypatch):
     sqs_listener.listen(args, s3_client)
     compressed_data = s3_client.get_object(Bucket=DESTINATION_BUCKET, Key=f'{DESTINATION_PREFIX}some_file.gz')["Body"].read()
     print(f'compressed datataa : {compressed_data}')
-    decompressed = decompress(compressed_data)
+    decompressed = decompress(compressed_data).decode()
     assert decompressed == 'test_data'
 
 @mock_sqs
