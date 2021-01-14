@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@master
       - name: tests
         run: |
-          pip install tox
+          pip3 install tox
           make tests
 
   get-publish-version:
