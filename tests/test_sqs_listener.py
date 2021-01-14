@@ -100,7 +100,7 @@ def test_process_dynamo_db_response_2():
 @mock_dynamodb2
 @mock_s3
 def test_all(monkeypatch):
-    sqs_client = boto3.client("sqs")
+    sqs_client = boto3.client(service_name="sqs", region_name="eu-west-2")
     json_file = open("tests/sqs_message.json")
     response = json.load(json_file)
     msg_json_str = json.dumps(response)
