@@ -67,7 +67,7 @@ class DynamoRecord:
 
 def listen(args, s3_client):
     logger_utils.setup_logging(logger, args.log_level)
-    sqs_client = get_client(service_name="sqs")
+    sqs_client = get_client(service_name="sqs", region_name=args.region_name)
     while True:
         response = sqs_client.get_queue_attributes(
             QueueUrl=args.sqs_url, AttributeNames=["ApproximateNumberOfMessages"]
@@ -83,7 +83,7 @@ def listen(args, s3_client):
             messages = response["Messages"]
             logger.info(f"Messages(s) received from queue: {json.dumps(messages)}")
             s3_prefixes = process_messages(messages)
-            dynamodb = get_dynamodb_resource()
+            dynamodb = get_dynamodb_resource(args.region_name)
             s3prefix_and_dynamodb_records = query_dynamodb(s3_prefixes, dynamodb)
             dynamo_records = process_dynamo_db_response(s3prefix_and_dynamodb_records)
             start_processing(s3_client, dynamo_records, args)
@@ -324,21 +324,17 @@ def assume_role():
     return assume_role_dict["Credentials"]
 
 
-def get_client(service_name):
-    client = boto3.client(service_name)
+def get_client(service_name, region_name):
+    client = boto3.client(service_name, region_name)
     return client
 
 
-def get_dynamodb_resource():
-    return boto3.resource("dynamodb", region_name="eu-west-2")
+def get_dynamodb_resource(region_name):
+    return boto3.resource("dynamodb", region_name=region_name)
 
 
 def get_s3_client():
     return boto3.client("s3")
-
-
-def get_s3_resource():
-    return boto3.resource("s3", region_name="${aws_default_region}")
 
 
 def parse_args():

@@ -21,7 +21,7 @@ S3_TRANSFER_TYPE = "S3"
 DESTINATION_BUCKET = "4321"
 SOURCE_BUCKET = "1234"
 DESTINATION_PREFIX = "output/"
-AWS_REGION = "eu-west-2"
+AWS_REGION = "us-east-1"
 DYNAMODB_TABLENAME = "data-egress"
 HASH_KEY = "pipeline_name"
 RANGE_KEY = "source_prefix"
@@ -100,12 +100,13 @@ def test_process_dynamo_db_response_2():
 @mock_dynamodb2
 @mock_s3
 def test_all(monkeypatch):
-    sqs_client = boto3.client(service_name="sqs", region_name="us-east-1")
+    sqs_client = boto3.client(service_name="sqs", region_name=AWS_REGION)
     json_file = open("tests/sqs_message.json")
     response = json.load(json_file)
     msg_json_str = json.dumps(response)
     args = mock_args()
     args.sqs_url = mock_get_sqs_resource().url
+    args.region_name = AWS_REGION
     sqs_client.send_message(QueueUrl=args.sqs_url, MessageBody=msg_json_str)
     monkeypatch.setattr(
         sqs_listener, "get_dynamodb_resource", mock_get_dynamodb_resource
@@ -123,14 +124,14 @@ def test_all(monkeypatch):
 
 @mock_sqs
 def mock_get_sqs_resource():
-    sqs = boto3.resource("sqs")
+    sqs = boto3.resource(service_name="sqs", region_name=AWS_REGION)
     test_sqs_queue = sqs.create_queue(QueueName="test-sqs-queue")
     return test_sqs_queue
 
 
 @mock_dynamodb2
-def mock_get_dynamodb_resource():
-    dynamodb = boto3.resource("dynamodb", region_name=AWS_REGION)
+def mock_get_dynamodb_resource(region_name):
+    dynamodb = boto3.resource(service_name="dynamodb", region_name=AWS_REGION)
     table = dynamodb.create_table(
         TableName=DYNAMODB_TABLENAME,
         KeySchema=[
@@ -161,7 +162,7 @@ def mock_get_dynamodb_resource():
 
 @mock_s3
 def mock_get_s3_client():
-    s3_client = boto3.client(service_name="s3", region_name="us-east-1")
+    s3_client = boto3.client(service_name="s3", region_name=AWS_REGION)
     s3_client.create_bucket(Bucket=SOURCE_BUCKET)
     s3_client.create_bucket(Bucket=DESTINATION_BUCKET)
     encrypted = encrypt_data("test_data")
