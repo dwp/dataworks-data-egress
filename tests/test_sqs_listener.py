@@ -28,24 +28,27 @@ RANGE_KEY = "source_prefix"
 
 
 def test_process_message():
-    json_file = open('tests/sqs_message.json')
+    json_file = open("tests/sqs_message.json")
     message_body = json.load(json_file)
     response = {"Messages": [{"Body": json.dumps(message_body)}]}
     s3_prefixes = sqs_listener.process_messages(response["Messages"])
-    assert s3_prefixes[0] == 'data-egress-testing/2021-01-10/'
+    assert s3_prefixes[0] == "data-egress-testing/2021-01-10/"
 
 
 def test_process_message_with_error():
-    json_file = open('tests/sqs_message_no_records.json')
+    json_file = open("tests/sqs_message_no_records.json")
     message_body = json.load(json_file)
     response = {"Messages": [{"Body": json.dumps(message_body)}]}
     with pytest.raises(KeyError) as ex:
         sqs_listener.process_messages(response["Messages"])
-    assert str(ex.value) == '"Key: \'s3\' not found when retrieving the prefix from sqs message"'
+    assert (
+        str(ex.value)
+        == "\"Key: 's3' not found when retrieving the prefix from sqs message\""
+    )
 
 
 def test_process_message_wrong_formatted_prefix_1():
-    json_file = open('tests/sqs_message_wrong_formatted_prefix_1.json')
+    json_file = open("tests/sqs_message_wrong_formatted_prefix_1.json")
     message_body = json.load(json_file)
     response = {"Messages": [{"Body": json.dumps(message_body)}]}
     s3_prefixes = sqs_listener.process_messages(response["Messages"])
@@ -53,7 +56,7 @@ def test_process_message_wrong_formatted_prefix_1():
 
 
 def test_process_message_wrong_formatted_prefix_2():
-    json_file = open('tests/sqs_message_wrong_formatted_prefix_2.json')
+    json_file = open("tests/sqs_message_wrong_formatted_prefix_2.json")
     message_body = json.load(json_file)
     response = {"Messages": [{"Body": json.dumps(message_body)}]}
     s3_prefixes = sqs_listener.process_messages(response["Messages"])
@@ -98,7 +101,11 @@ def test_process_dynamo_db_response_2():
 @mock_s3
 def test_all(monkeypatch):
     sqs_client = boto3.client("sqs")
-    json_file = open('tests/sqs_message.json')
+    json_file = open(
+        "tests/sqs_message.json"
+    )
+    sqs_client = boto3.client("sqs")
+    json_file = open("tests/sqs_message.json")
     response = json.load(json_file)
     msg_json_str = json.dumps(response)
     args = mock_args()
