@@ -8,13 +8,10 @@ import argparse
 import logging
 import zlib
 
-from Crypto import Random
 from Crypto.Cipher import AES
 from Crypto.Util import Counter
 import base64
-import binascii
 
-MOTO_SERVER_URL = "http://127.0.0.1:5000"
 SOURCE_PREFIX = "data-egress-testing/2021-01-10/"
 RECIPIENT_NAME = "OpsMI"
 S3_TRANSFER_TYPE = "S3"
@@ -23,15 +20,15 @@ SOURCE_BUCKET = "1234"
 DESTINATION_PREFIX = "output/"
 AWS_REGION = "us-east-1"
 DYNAMODB_TABLENAME = "data-egress"
-HASH_KEY = "pipeline_name"
-RANGE_KEY = "source_prefix"
+HASH_KEY = "source_prefix"
+RANGE_KEY = "pipeline_name"
 
 
 def test_process_message():
     json_file = open("tests/sqs_message.json")
     message_body = json.load(json_file)
     response = {"Messages": [{"Body": json.dumps(message_body)}]}
-    s3_prefixes = sqs_listener.process_messages(response["Messages"])
+    s3_prefixes = sqs_listener.get_to_be_processed_s3_prefixes(response["Messages"])
     assert s3_prefixes[0] == "data-egress-testing/2021-01-10/"
 
 
@@ -40,7 +37,7 @@ def test_process_message_with_error():
     message_body = json.load(json_file)
     response = {"Messages": [{"Body": json.dumps(message_body)}]}
     with pytest.raises(KeyError) as ex:
-        sqs_listener.process_messages(response["Messages"])
+        sqs_listener.get_to_be_processed_s3_prefixes(response["Messages"])
     assert (
         str(ex.value)
         == "\"Key: 's3' not found when retrieving the prefix from sqs message\""
@@ -51,7 +48,7 @@ def test_process_message_wrong_formatted_prefix_1():
     json_file = open("tests/sqs_message_wrong_formatted_prefix_1.json")
     message_body = json.load(json_file)
     response = {"Messages": [{"Body": json.dumps(message_body)}]}
-    s3_prefixes = sqs_listener.process_messages(response["Messages"])
+    s3_prefixes = sqs_listener.get_to_be_processed_s3_prefixes(response["Messages"])
     assert len(s3_prefixes) == 0
 
 
@@ -59,7 +56,7 @@ def test_process_message_wrong_formatted_prefix_2():
     json_file = open("tests/sqs_message_wrong_formatted_prefix_2.json")
     message_body = json.load(json_file)
     response = {"Messages": [{"Body": json.dumps(message_body)}]}
-    s3_prefixes = sqs_listener.process_messages(response["Messages"])
+    s3_prefixes = sqs_listener.get_to_be_processed_s3_prefixes(response["Messages"])
     assert len(s3_prefixes) == 0
 
 
@@ -146,8 +143,8 @@ def mock_get_dynamodb_resource(region_name):
     )
     table.put_item(
         Item={
-            HASH_KEY: RECIPIENT_NAME,
-            RANGE_KEY: SOURCE_PREFIX,
+            HASH_KEY: SOURCE_PREFIX,
+            RANGE_KEY: RECIPIENT_NAME,
             "source_bucket": SOURCE_BUCKET,
             "destination_bucket": DESTINATION_BUCKET,
             "destination_prefix": DESTINATION_PREFIX,
