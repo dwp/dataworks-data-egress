@@ -60,14 +60,14 @@ class S3PrefixAndDynamoRecord:
 
 class DynamoRecord:
     def __init__(
-            self,
-            source_bucket,
-            source_prefix,
-            destination_bucket,
-            destination_prefix,
-            transfer_type,
-            compress,
-            compression_fmt,
+        self,
+        source_bucket,
+        source_prefix,
+        destination_bucket,
+        destination_prefix,
+        transfer_type,
+        compress,
+        compression_fmt,
     ):
         self.source_bucket = source_bucket
         self.source_prefix = source_prefix
@@ -103,12 +103,16 @@ def listen(args, s3_client):
                 s3_prefixes = get_to_be_processed_s3_prefixes(messages)
                 dynamodb = get_dynamodb_resource(args.region_name)
                 s3prefix_and_dynamodb_records = query_dynamodb(s3_prefixes, dynamodb)
-                dynamo_records = process_dynamo_db_response(s3prefix_and_dynamodb_records)
+                dynamo_records = process_dynamo_db_response(
+                    s3prefix_and_dynamodb_records
+                )
                 start_processing(s3_client, dynamo_records, args)
                 if args.is_test:
                     break
         except Exception as ex:
-            logger.error(f'Failed to process the messages with s3 prefixes {s3_prefixes}: {str(ex)}')
+            logger.error(
+                f"Failed to process the messages with s3 prefixes {s3_prefixes}: {str(ex)}"
+            )
 
 
 def get_to_be_processed_s3_prefixes(messages):
@@ -151,9 +155,7 @@ def query_dynamodb(s3_prefixes, dynamodb):
     table = dynamodb.Table(DATA_EGRESS_DYNAMO_DB_TABLE)
     s3prefix_and_dynamodb_records = []
     for s3_prefix in s3_prefixes:
-        response = table.query(
-            KeyConditionExpression=Key(HASH_KEY).eq(s3_prefix)
-        )
+        response = table.query(KeyConditionExpression=Key(HASH_KEY).eq(s3_prefix))
         items = response[ITEMS]
         logger.info(f"dynamodb items for {s3_prefix}: {items}")
         s3prefix_and_dynamodb_records.append(S3PrefixAndDynamoRecord(s3_prefix, items))
@@ -380,8 +382,7 @@ def get_dynamodb_resource(region_name):
 
 
 def get_s3_client():
-    """gets S3 client
-    """
+    """gets S3 client"""
     return boto3.client(S3)
 
 
@@ -399,8 +400,7 @@ def parse_args():
 
 
 def main():
-    """ Entry point to the program
-    """
+    """Entry point to the program"""
     args = parse_args()
     listen(args)
 
