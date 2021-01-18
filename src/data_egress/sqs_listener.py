@@ -68,7 +68,7 @@ class DynamoRecord:
         transfer_type,
         compress,
         compression_fmt,
-        role_arn
+        role_arn,
     ):
         self.source_bucket = source_bucket
         self.source_prefix = source_prefix
@@ -194,7 +194,7 @@ def process_dynamo_db_response(s3prefix_and_dynamodb_records):
                     destination_prefix = record[DYNAMO_DB_ITEM_DESTINATION_PREFIX]
                     compress = record[DYNAMO_DB_ITEM_COMPRESS]
                     compression_fmt = record[DYNAMO_DB_ITEM_COMPRESSION_FMT]
-                    role_arn = record['role_arn']
+                    role_arn = record["role_arn"]
                     dynamo_records.append(
                         DynamoRecord(
                             source_bucket,
@@ -204,7 +204,7 @@ def process_dynamo_db_response(s3prefix_and_dynamodb_records):
                             transfer_type,
                             compress,
                             compression_fmt,
-                            role_arn
+                            role_arn,
                         )
                     )
                     return dynamo_records
@@ -246,7 +246,7 @@ def start_processing(s3_client, dynamo_records, args):
             destination_bucket = dynamo_record.destination_bucket
             destination_prefix = dynamo_record.destination_prefix
             role_arn = dynamo_record.role_arn
-            sts_response = assume_role(role_arn, 'session_name', 3600)
+            sts_response = assume_role(role_arn, "session_name", 3600)
             s3_client_with_assumed_role = get_s3_client_with_assumed_role(sts_response)
             save(
                 s3_client_with_assumed_role,
@@ -365,7 +365,7 @@ def save(s3_client, file_name, destination_bucket, destination_prefix, data):
             Bucket=destination_bucket,
             Key=key,
         )
-        logger.info(f'Saved key: {key} in destination bucket {destination_bucket}')
+        logger.info(f"Saved key: {key} in destination bucket {destination_bucket}")
     except Exception as ex:
         logger.error(f"Exception while saving {str(ex)}")
 
@@ -404,12 +404,13 @@ def get_s3_client_with_assumed_role(sts_reponse):
     access_key_id = sts_reponse["AccessKeyId"]
     secret_access_key = sts_reponse["SecretAccessKey"]
     session_token = sts_reponse["SessionToken"]
-    logger.info(f'session : {access_key_id} {secret_access_key} {session_token}')
+    logger.info(f"session : {access_key_id} {secret_access_key} {session_token}")
     return boto3.client(
-        's3',
+        "s3",
         aws_access_key_id=access_key_id,
         aws_secret_access_key=secret_access_key,
-        aws_session_token=session_token)
+        aws_session_token=session_token,
+    )
 
 
 def parse_args():
@@ -433,7 +434,7 @@ def assume_role(aws_role_arn, session_name, session_timeout):
     session_name: Name of the boto3 session
     session_timeout: timeout for the session
     """
-    logger.info(f'role arn is {aws_role_arn}')
+    logger.info(f"role arn is {aws_role_arn}")
     try:
         sts_client = boto3.client("sts")
         assume_role_dict = sts_client.assume_role(
@@ -444,7 +445,7 @@ def assume_role(aws_role_arn, session_name, session_timeout):
 
         return assume_role_dict["Credentials"]
     except Exception as ex:
-        logger.error(f'error while assuming role {str(ex)}')
+        logger.error(f"error while assuming role {str(ex)}")
 
 
 def main():

@@ -16,8 +16,8 @@ SERVICE_S3 = "s3"
 
 IV_BASE64 = "BDva/T7HssDYMtyLfn/afw=="
 IV_INT = 5627699127241421480342634160438893183
-SERVICE_IAM = 'iam'
-DESTINATION_BUCKET_ROLE = 'destination_bucket_role'
+SERVICE_IAM = "iam"
+DESTINATION_BUCKET_ROLE = "destination_bucket_role"
 PLAIN_TEXT_KEY = "UBkbtizlrjYs5kZch3CwCg=="
 GZIP_VALUE = "gzip"
 ROLE_ARN_VALUE = "arn:aws:iam::123456789012:role/destination_bucket_role"
@@ -33,7 +33,7 @@ KEY_COMPRESS = "compress"
 KEY_RECIPIENT_NAME = "recipient_name"
 KEY_TRANSFER_TYPE = "transfer_type"
 KEY_DESTINATION_BUCKET = "destination_bucket"
-KEY_SOURCE_BUCKET= "source_bucket"
+KEY_SOURCE_BUCKET = "source_bucket"
 KEY_DESTINATION_PREFIX = "destination_prefix"
 DESTINATION_PREFIX_VALUE = "output/"
 KEY_SOURCE_PREFIX = "source_prefix"
@@ -62,8 +62,8 @@ def test_get_to_be_processed_s3_prefixes_with_invalid_msg():
     with pytest.raises(KeyError) as ex:
         sqs_listener.get_to_be_processed_s3_prefixes(response[MESSAGES])
     assert (
-            str(ex.value)
-            == "\"Key: 's3' not found when retrieving the prefix from sqs message\""
+        str(ex.value)
+        == "\"Key: 's3' not found when retrieving the prefix from sqs message\""
     )
 
 
@@ -88,31 +88,40 @@ def test_process_dynamo_db_response():
     with pytest.raises(Exception) as ex:
         sqs_listener.process_dynamo_db_response(records)
     assert (
-            str(ex.value)
-            == "No records found in dynamo db for the s3_prefix data-egress-testing/2021-01-10/"
+        str(ex.value)
+        == "No records found in dynamo db for the s3_prefix data-egress-testing/2021-01-10/"
     )
 
 
 def test_process_dynamo_db_response_1():
     records = [
         S3PrefixAndDynamoRecord(
-            SOURCE_PREFIX_VALUE, [{KEY_SOURCE_BUCKET: SOURCE_BUCKET_VALUE}, {KEY_SOURCE_BUCKET: SOURCE_BUCKET_VALUE}]
+            SOURCE_PREFIX_VALUE,
+            [
+                {KEY_SOURCE_BUCKET: SOURCE_BUCKET_VALUE},
+                {KEY_SOURCE_BUCKET: SOURCE_BUCKET_VALUE},
+            ],
         )
     ]
     with pytest.raises(Exception) as ex:
         sqs_listener.process_dynamo_db_response(records)
-    assert str(ex.value) == "More than 1 record for the s3_prefix data-egress-testing/2021-01-10/"
+    assert (
+        str(ex.value)
+        == "More than 1 record for the s3_prefix data-egress-testing/2021-01-10/"
+    )
 
 
 def test_process_dynamo_db_response_2():
     records = [
-        S3PrefixAndDynamoRecord(SOURCE_PREFIX_VALUE, [{KEY_DESTINATION_BUCKET: DESTINATION_BUCKET_VALUE}])
+        S3PrefixAndDynamoRecord(
+            SOURCE_PREFIX_VALUE, [{KEY_DESTINATION_BUCKET: DESTINATION_BUCKET_VALUE}]
+        )
     ]
     with pytest.raises(KeyError) as ex:
         sqs_listener.process_dynamo_db_response(records)
     assert (
-            str(ex.value)
-            == "\"Key: 'source_bucket' not found when retrieving from dynamodb response\""
+        str(ex.value)
+        == "\"Key: 'source_bucket' not found when retrieving from dynamodb response\""
     )
 
 
@@ -175,7 +184,7 @@ def mock_get_dynamodb_resource(region_name):
             KEY_RECIPIENT_NAME: RECIPIENT_NAME_VALUE,
             KEY_COMPRESS: True,
             KEY_COMPRESSION_FMT: GZIP_VALUE,
-            KEY_ROLE_ARN: ROLE_ARN_VALUE
+            KEY_ROLE_ARN: ROLE_ARN_VALUE,
         }
     )
     return dynamodb
@@ -191,24 +200,20 @@ def mock_get_s3_client():
         "Statement": [
             {
                 "Effect": "Allow",
-                "Principal": {
-                    "AWS": ROLE_ARN_VALUE
-                },
+                "Principal": {"AWS": ROLE_ARN_VALUE},
                 "Action": "s3:ListBucket",
-                "Resource": "arn:aws:s3:::4321"
+                "Resource": "arn:aws:s3:::4321",
             },
             {
                 "Effect": "Allow",
-                "Principal": {
-                    "AWS": ROLE_ARN_VALUE
-                },
+                "Principal": {"AWS": ROLE_ARN_VALUE},
                 "Action": [
                     "s3:GetObject",
                     "s3:PutObject",
                 ],
-                "Resource": "arn:aws:s3:::4321/*"
-            }
-        ]
+                "Resource": "arn:aws:s3:::4321/*",
+            },
+        ],
     }
     # Convert the policy from JSON dict to string
     bucket_policy = json.dumps(bucket_policy)
@@ -233,9 +238,7 @@ def decompress(data):
 
 
 def encrypt_data(data):
-    return encrypt(
-        IV_INT, PLAIN_TEXT_KEY, data.encode()
-    )
+    return encrypt(IV_INT, PLAIN_TEXT_KEY, data.encode())
 
 
 def encrypt(initialisation_vector, datakey, unencrypted_bytes):
@@ -255,7 +258,7 @@ def create_iam_role():
     iam_client = boto3.client(SERVICE_IAM)
     trust_relationship_policy_another_iam_user = trust_relationship()
     role = create_role(iam_client, trust_relationship_policy_another_iam_user)
-    policy_arn = create_policy(iam_client, role['Role']['Arn'])
+    policy_arn = create_policy(iam_client, role["Role"]["Arn"])
     attach_policy(iam_client, policy_arn)
 
 
@@ -264,12 +267,8 @@ def trust_relationship():
     trust_relationship_policy_another_iam_user = {
         "Version": "2012-10-17",
         "Statement": [
-            {
-                "Effect": "Allow",
-                "Principal": "*",
-                "Action": "sts:AssumeRole"
-            }
-        ]
+            {"Effect": "Allow", "Principal": "*", "Action": "sts:AssumeRole"}
+        ],
     }
     return trust_relationship_policy_another_iam_user
 
@@ -278,11 +277,13 @@ def create_role(iam_client, trust_relationship_policy_another_iam_user):
     try:
         return iam_client.create_role(
             RoleName=DESTINATION_BUCKET_ROLE,
-            AssumeRolePolicyDocument=json.dumps(trust_relationship_policy_another_iam_user),
-            Description='This is a test role for destination bucket',
+            AssumeRolePolicyDocument=json.dumps(
+                trust_relationship_policy_another_iam_user
+            ),
+            Description="This is a test role for destination bucket",
         )
     except Exception as ex:
-        print(f'Error while creating role {str(ex)}')
+        print(f"Error while creating role {str(ex)}")
 
 
 def create_policy(iam_client):
@@ -292,38 +293,34 @@ def create_policy(iam_client):
             {
                 "Effect": "Allow",
                 "Action": "s3:ListBucket",
-                "Resource": "arn:aws:s3:::4321"
+                "Resource": "arn:aws:s3:::4321",
             },
             {
                 "Effect": "Allow",
-                "Action": [
-                    "s3:GetObject",
-                    "s3:PutObject"
-                ],
-                "Resource": "arn:aws:s3:::4321/*"
-            }]
+                "Action": ["s3:GetObject", "s3:PutObject"],
+                "Resource": "arn:aws:s3:::4321/*",
+            },
+        ],
     }
 
-    policy_name = DESTINATION_BUCKET_ROLE + '_policy'
+    policy_name = DESTINATION_BUCKET_ROLE + "_policy"
     try:
         policy_res = iam_client.create_policy(
-            PolicyName=policy_name,
-            PolicyDocument=json.dumps(policy_json)
+            PolicyName=policy_name, PolicyDocument=json.dumps(policy_json)
         )
-        policy_arn = policy_res['Policy']['Arn']
+        policy_arn = policy_res["Policy"]["Arn"]
         return policy_arn
     except Exception as ex:
-        print(f'Error while creating policy {str(ex)}')
+        print(f"Error while creating policy {str(ex)}")
 
 
 def attach_policy(iam_client, policy_arn):
     try:
         iam_client.attach_role_policy(
-            RoleName=DESTINATION_BUCKET_ROLE,
-            PolicyArn=policy_arn
+            RoleName=DESTINATION_BUCKET_ROLE, PolicyArn=policy_arn
         )
     except Exception as ex:
-        print(f'Error while attaching policy {str(ex)}')
+        print(f"Error while attaching policy {str(ex)}")
 
 
 def mock_call_dks(cek, kek, args):
