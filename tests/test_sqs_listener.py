@@ -83,7 +83,6 @@ def test_get_to_be_processed_s3_prefixes_wrong_formatted_prefix_2():
     assert len(s3_prefixes) == 0
 
 
-
 @mock_sqs
 @mock_dynamodb2
 @mock_s3
