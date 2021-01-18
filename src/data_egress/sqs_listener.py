@@ -103,6 +103,7 @@ def listen(args, s3_client):
                 logger.debug(f"Response received from queue: {response}")
                 messages = response[MESSAGES]
                 s3_prefixes = get_to_be_processed_s3_prefixes(messages)
+                logger.info(f"s3 prefixes to be processed are : {s3_prefixes}")
                 dynamodb = get_dynamodb_resource(args.region_name)
                 s3prefix_and_dynamodb_records = query_dynamodb(s3_prefixes, dynamodb)
                 dynamo_records = process_dynamo_db_response(
@@ -132,7 +133,6 @@ def get_to_be_processed_s3_prefixes(messages):
             message_body = json.loads(message[BODY])
             for event in message_body[KEY_RECORDS]:
                 s3_key = event[KEY_S3][KEY_OBJECT][KEY_KEY]
-                logger.info(f"s3_key : {s3_key}")
                 s3_keys.append(s3_key)
     except Exception as ex:
         logger.error(
@@ -207,7 +207,6 @@ def process_dynamo_db_response(s3prefix_and_dynamodb_records):
                             role_arn
                         )
                     )
-                    logger.info(f"fffff {dynamo_records}")
                     return dynamo_records
             except Exception as ex:
                 logger.error(
@@ -247,7 +246,6 @@ def start_processing(s3_client, dynamo_records, args):
             destination_bucket = dynamo_record.destination_bucket
             destination_prefix = dynamo_record.destination_prefix
             role_arn = dynamo_record.role_arn
-            logger.info(f"compresssssed : {data}")
             sts_response = assume_role(role_arn, 'session_name', 3600)
             s3_client_with_assumed_role = get_s3_client_with_assumed_role(sts_response)
             save(
@@ -361,13 +359,13 @@ def save(s3_client, file_name, destination_bucket, destination_prefix, data):
     data: Data to be uploaded
     """
     try:
-        logger.info(f'i am about to save')
+        key = f"{destination_prefix}{file_name}.gz"
         response = s3_client.put_object(
             Body=data,
             Bucket=destination_bucket,
-            Key=f"{destination_prefix}{file_name}.gz",
+            Key=key,
         )
-        logger.info(f'Did i save {response}')
+        logger.info(f'Saved key: {key} in destination bucket {destination_bucket}')
     except Exception as ex:
         logger.error(f"Exception while saving {str(ex)}")
 
@@ -397,10 +395,12 @@ def get_s3_client():
     return boto3.client(S3)
 
 
-# is region needed
+# is region needed?
 def get_s3_client_with_assumed_role(sts_reponse):
-    """gets S3 client"""
-    logger.info(f'whattt')
+    """gets S3 client
+      Arguments:
+    sts_reponse: response from sts service
+    """
     access_key_id = sts_reponse["AccessKeyId"]
     secret_access_key = sts_reponse["SecretAccessKey"]
     session_token = sts_reponse["SessionToken"]
@@ -410,7 +410,6 @@ def get_s3_client_with_assumed_role(sts_reponse):
         aws_access_key_id=access_key_id,
         aws_secret_access_key=secret_access_key,
         aws_session_token=session_token)
-
 
 
 def parse_args():

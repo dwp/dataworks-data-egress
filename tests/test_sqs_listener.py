@@ -12,78 +12,101 @@ from Crypto.Cipher import AES
 from Crypto.Util import Counter
 import base64
 
-SOURCE_PREFIX = "data-egress-testing/2021-01-10/"
-RECIPIENT_NAME = "OpsMI"
-S3_TRANSFER_TYPE = "S3"
-DESTINATION_BUCKET = "4321"
-SOURCE_BUCKET = "1234"
-DESTINATION_PREFIX = "output/"
+SERVICE_S3 = "s3"
+
+IV_BASE64 = "BDva/T7HssDYMtyLfn/afw=="
+IV_INT = 5627699127241421480342634160438893183
+SERVICE_IAM = 'iam'
+DESTINATION_BUCKET_ROLE = 'destination_bucket_role'
+PLAIN_TEXT_KEY = "UBkbtizlrjYs5kZch3CwCg=="
+GZIP_VALUE = "gzip"
+ROLE_ARN_VALUE = "arn:aws:iam::123456789012:role/destination_bucket_role"
+SERVICE_DYNAMODB = "dynamodb"
+TEST_SQS_QUEUE = "test-sqs-queue"
+TEST_DATA = "test_data"
+SERVICE_SQS = "sqs"
+BODY = "Body"
+MESSAGES = "Messages"
+KEY_ROLE_ARN = "role_arn"
+KEY_COMPRESSION_FMT = "compression_fmt"
+KEY_COMPRESS = "compress"
+KEY_RECIPIENT_NAME = "recipient_name"
+KEY_TRANSFER_TYPE = "transfer_type"
+KEY_DESTINATION_BUCKET = "destination_bucket"
+KEY_SOURCE_BUCKET= "source_bucket"
+KEY_DESTINATION_PREFIX = "destination_prefix"
+DESTINATION_PREFIX_VALUE = "output/"
+KEY_SOURCE_PREFIX = "source_prefix"
+KEY_PIPELINE_NAME = "pipeline_name"
+SOURCE_PREFIX_VALUE = "data-egress-testing/2021-01-10/"
+RECIPIENT_NAME_VALUE = "OpsMI"
+S3_TRANSFER_TYPE_VALUE = "S3"
+DESTINATION_BUCKET_VALUE = "4321"
+SOURCE_BUCKET_VALUE = "1234"
 AWS_REGION = "us-east-1"
 DYNAMODB_TABLENAME = "data-egress"
-HASH_KEY = "source_prefix"
-RANGE_KEY = "pipeline_name"
 
 
-def test_process_message():
+def test_get_to_be_processed_s3_prefixes():
     json_file = open("tests/sqs_message.json")
     message_body = json.load(json_file)
-    response = {"Messages": [{"Body": json.dumps(message_body)}]}
-    s3_prefixes = sqs_listener.get_to_be_processed_s3_prefixes(response["Messages"])
-    assert s3_prefixes[0] == "data-egress-testing/2021-01-10/"
+    response = {MESSAGES: [{BODY: json.dumps(message_body)}]}
+    s3_prefixes = sqs_listener.get_to_be_processed_s3_prefixes(response[MESSAGES])
+    assert SOURCE_PREFIX_VALUE == s3_prefixes[0]
 
 
-def test_process_message_with_error():
+def test_get_to_be_processed_s3_prefixes_with_invalid_msg():
     json_file = open("tests/sqs_message_no_records.json")
     message_body = json.load(json_file)
-    response = {"Messages": [{"Body": json.dumps(message_body)}]}
+    response = {MESSAGES: [{BODY: json.dumps(message_body)}]}
     with pytest.raises(KeyError) as ex:
-        sqs_listener.get_to_be_processed_s3_prefixes(response["Messages"])
+        sqs_listener.get_to_be_processed_s3_prefixes(response[MESSAGES])
     assert (
             str(ex.value)
             == "\"Key: 's3' not found when retrieving the prefix from sqs message\""
     )
 
 
-def test_process_message_wrong_formatted_prefix_1():
+def test_get_to_be_processed_s3_prefixes_wrong_formatted_prefix_1():
     json_file = open("tests/sqs_message_wrong_formatted_prefix_1.json")
     message_body = json.load(json_file)
-    response = {"Messages": [{"Body": json.dumps(message_body)}]}
-    s3_prefixes = sqs_listener.get_to_be_processed_s3_prefixes(response["Messages"])
+    response = {MESSAGES: [{BODY: json.dumps(message_body)}]}
+    s3_prefixes = sqs_listener.get_to_be_processed_s3_prefixes(response[MESSAGES])
     assert len(s3_prefixes) == 0
 
 
-def test_process_message_wrong_formatted_prefix_2():
+def test_get_to_be_processed_s3_prefixes_wrong_formatted_prefix_2():
     json_file = open("tests/sqs_message_wrong_formatted_prefix_2.json")
     message_body = json.load(json_file)
-    response = {"Messages": [{"Body": json.dumps(message_body)}]}
-    s3_prefixes = sqs_listener.get_to_be_processed_s3_prefixes(response["Messages"])
+    response = {MESSAGES: [{BODY: json.dumps(message_body)}]}
+    s3_prefixes = sqs_listener.get_to_be_processed_s3_prefixes(response[MESSAGES])
     assert len(s3_prefixes) == 0
 
 
 def test_process_dynamo_db_response():
-    records = [S3PrefixAndDynamoRecord("data-egress-testing/", [])]
+    records = [S3PrefixAndDynamoRecord(SOURCE_PREFIX_VALUE, [])]
     with pytest.raises(Exception) as ex:
         sqs_listener.process_dynamo_db_response(records)
     assert (
             str(ex.value)
-            == "No records found in dynamo db for the s3_prefix data-egress-testing/"
+            == "No records found in dynamo db for the s3_prefix data-egress-testing/2021-01-10/"
     )
 
 
 def test_process_dynamo_db_response_1():
     records = [
         S3PrefixAndDynamoRecord(
-            "data-egress-testing/", [{"source_bucket": "123"}, {"source_bucket": "456"}]
+            SOURCE_PREFIX_VALUE, [{KEY_SOURCE_BUCKET: SOURCE_BUCKET_VALUE}, {KEY_SOURCE_BUCKET: SOURCE_BUCKET_VALUE}]
         )
     ]
     with pytest.raises(Exception) as ex:
         sqs_listener.process_dynamo_db_response(records)
-    assert str(ex.value) == "More than 1 record for the s3_prefix data-egress-testing/"
+    assert str(ex.value) == "More than 1 record for the s3_prefix data-egress-testing/2021-01-10/"
 
 
 def test_process_dynamo_db_response_2():
     records = [
-        S3PrefixAndDynamoRecord("data-egress-testing/", [{"destination_bucket": "123"}])
+        S3PrefixAndDynamoRecord(SOURCE_PREFIX_VALUE, [{KEY_DESTINATION_BUCKET: DESTINATION_BUCKET_VALUE}])
     ]
     with pytest.raises(KeyError) as ex:
         sqs_listener.process_dynamo_db_response(records)
@@ -98,7 +121,7 @@ def test_process_dynamo_db_response_2():
 @mock_s3
 @mock_sts
 def test_all(monkeypatch, aws_credentials):
-    sqs_client = boto3.client(service_name="sqs", region_name=AWS_REGION)
+    sqs_client = boto3.client(service_name=SERVICE_SQS, region_name=AWS_REGION)
     json_file = open("tests/sqs_message.json")
     response = json.load(json_file)
     msg_json_str = json.dumps(response)
@@ -113,47 +136,46 @@ def test_all(monkeypatch, aws_credentials):
     s3_client = mock_get_s3_client()
     sqs_listener.listen(args, s3_client)
     compressed_data = s3_client.get_object(
-        Bucket=DESTINATION_BUCKET, Key=f"{DESTINATION_PREFIX}some_file.gz"
-    )["Body"].read()
-    print(f"compressed datataa : {compressed_data}")
+        Bucket=DESTINATION_BUCKET_VALUE, Key=f"{DESTINATION_PREFIX_VALUE}some_file.gz"
+    )[BODY].read()
     decompressed = decompress(compressed_data).decode()
-    assert decompressed == "test_data"
+    assert decompressed == TEST_DATA
 
 
 @mock_sqs
 def mock_get_sqs_resource():
-    sqs = boto3.resource(service_name="sqs", region_name=AWS_REGION)
-    test_sqs_queue = sqs.create_queue(QueueName="test-sqs-queue")
+    sqs = boto3.resource(service_name=SERVICE_SQS, region_name=AWS_REGION)
+    test_sqs_queue = sqs.create_queue(QueueName=TEST_SQS_QUEUE)
     return test_sqs_queue
 
 
 @mock_dynamodb2
 def mock_get_dynamodb_resource(region_name):
-    dynamodb = boto3.resource(service_name="dynamodb", region_name=AWS_REGION)
+    dynamodb = boto3.resource(service_name=SERVICE_DYNAMODB, region_name=AWS_REGION)
     table = dynamodb.create_table(
         TableName=DYNAMODB_TABLENAME,
         KeySchema=[
-            {"AttributeName": HASH_KEY, "KeyType": "HASH"},  # Partition key
-            {"AttributeName": RANGE_KEY, "KeyType": "RANGE"},  # Sort key
+            {"AttributeName": KEY_SOURCE_PREFIX, "KeyType": "HASH"},  # Partition key
+            {"AttributeName": KEY_PIPELINE_NAME, "KeyType": "RANGE"},  # Sort key
         ],
         AttributeDefinitions=[
-            {"AttributeName": HASH_KEY, "AttributeType": "S"},
-            {"AttributeName": RANGE_KEY, "AttributeType": "S"},
+            {"AttributeName": KEY_SOURCE_PREFIX, "AttributeType": "S"},
+            {"AttributeName": KEY_PIPELINE_NAME, "AttributeType": "S"},
         ],
         ProvisionedThroughput={"ReadCapacityUnits": 10, "WriteCapacityUnits": 10},
     )
     table.put_item(
         Item={
-            HASH_KEY: SOURCE_PREFIX,
-            RANGE_KEY: RECIPIENT_NAME,
-            "source_bucket": SOURCE_BUCKET,
-            "destination_bucket": DESTINATION_BUCKET,
-            "destination_prefix": DESTINATION_PREFIX,
-            "transfer_type": S3_TRANSFER_TYPE,
-            "recipient_name": RECIPIENT_NAME,
-            "compress": True,
-            "compression_fmt": "gzip",
-            "role_arn": "arn:aws:iam::123456789012:role/destination_bucket_role"
+            KEY_SOURCE_PREFIX: SOURCE_PREFIX_VALUE,
+            KEY_PIPELINE_NAME: RECIPIENT_NAME_VALUE,
+            KEY_SOURCE_BUCKET: SOURCE_BUCKET_VALUE,
+            KEY_DESTINATION_BUCKET: DESTINATION_BUCKET_VALUE,
+            KEY_DESTINATION_PREFIX: DESTINATION_PREFIX_VALUE,
+            KEY_TRANSFER_TYPE: S3_TRANSFER_TYPE_VALUE,
+            KEY_RECIPIENT_NAME: RECIPIENT_NAME_VALUE,
+            KEY_COMPRESS: True,
+            KEY_COMPRESSION_FMT: GZIP_VALUE,
+            KEY_ROLE_ARN: ROLE_ARN_VALUE
         }
     )
     return dynamodb
@@ -161,16 +183,16 @@ def mock_get_dynamodb_resource(region_name):
 
 @mock_s3
 def mock_get_s3_client():
-    s3_client = boto3.client(service_name="s3", region_name=AWS_REGION)
-    s3_client.create_bucket(Bucket=SOURCE_BUCKET)
-    s3_client.create_bucket(Bucket=DESTINATION_BUCKET)
+    s3_client = boto3.client(service_name=SERVICE_S3, region_name=AWS_REGION)
+    s3_client.create_bucket(Bucket=SOURCE_BUCKET_VALUE)
+    s3_client.create_bucket(Bucket=DESTINATION_BUCKET_VALUE)
     bucket_policy = {
         "Version": "2012-10-17",
         "Statement": [
             {
                 "Effect": "Allow",
                 "Principal": {
-                    "AWS": "arn:aws:iam::123456789012:role/destination_bucket_role"
+                    "AWS": ROLE_ARN_VALUE
                 },
                 "Action": "s3:ListBucket",
                 "Resource": "arn:aws:s3:::4321"
@@ -178,7 +200,7 @@ def mock_get_s3_client():
             {
                 "Effect": "Allow",
                 "Principal": {
-                    "AWS": "arn:aws:iam::123456789012:role/destination_bucket_role"
+                    "AWS": ROLE_ARN_VALUE
                 },
                 "Action": [
                     "s3:GetObject",
@@ -190,16 +212,15 @@ def mock_get_s3_client():
     }
     # Convert the policy from JSON dict to string
     bucket_policy = json.dumps(bucket_policy)
-    s3_client.put_bucket_policy(Bucket=DESTINATION_BUCKET, Policy=bucket_policy)
+    s3_client.put_bucket_policy(Bucket=DESTINATION_BUCKET_VALUE, Policy=bucket_policy)
 
-    encrypted = encrypt_data("test_data")
-    print(f"encrypted: {encrypted}")
+    encrypted = encrypt_data(TEST_DATA)
     s3_client.put_object(
         Body=encrypted,
-        Bucket=SOURCE_BUCKET,
-        Key=f"{SOURCE_PREFIX}some_file.enc",
+        Bucket=SOURCE_BUCKET_VALUE,
+        Key=f"{SOURCE_PREFIX_VALUE}some_file.enc",
         Metadata={
-            "iv": "BDva/T7HssDYMtyLfn/afw==",
+            "iv": IV_BASE64,
             "ciphertext": "test_ciphertext",
             "datakeyencryptionkeyid": "123",
         },
@@ -213,7 +234,7 @@ def decompress(data):
 
 def encrypt_data(data):
     return encrypt(
-        5627699127241421480342634160438893183, "UBkbtizlrjYs5kZch3CwCg==", data.encode()
+        IV_INT, PLAIN_TEXT_KEY, data.encode()
     )
 
 
@@ -231,7 +252,7 @@ def mock_args():
 
 
 def create_iam_role():
-    iam_client = boto3.client('iam')
+    iam_client = boto3.client(SERVICE_IAM)
     trust_relationship_policy_another_iam_user = trust_relationship()
     role = create_role(iam_client, trust_relationship_policy_another_iam_user)
     policy_arn = create_policy(iam_client, role['Role']['Arn'])
@@ -256,7 +277,7 @@ def trust_relationship():
 def create_role(iam_client, trust_relationship_policy_another_iam_user):
     try:
         return iam_client.create_role(
-            RoleName="destination_bucket_role",
+            RoleName=DESTINATION_BUCKET_ROLE,
             AssumeRolePolicyDocument=json.dumps(trust_relationship_policy_another_iam_user),
             Description='This is a test role for destination bucket',
         )
@@ -283,7 +304,7 @@ def create_policy(iam_client):
             }]
     }
 
-    policy_name = 'destination_bucket_role' + '_policy'
+    policy_name = DESTINATION_BUCKET_ROLE + '_policy'
     try:
         policy_res = iam_client.create_policy(
             PolicyName=policy_name,
@@ -298,7 +319,7 @@ def create_policy(iam_client):
 def attach_policy(iam_client, policy_arn):
     try:
         iam_client.attach_role_policy(
-            RoleName='destination_bucket_role',
+            RoleName=DESTINATION_BUCKET_ROLE,
             PolicyArn=policy_arn
         )
     except Exception as ex:
@@ -306,4 +327,4 @@ def attach_policy(iam_client, policy_arn):
 
 
 def mock_call_dks(cek, kek, args):
-    return "UBkbtizlrjYs5kZch3CwCg=="
+    return PLAIN_TEXT_KEY
