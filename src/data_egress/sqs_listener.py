@@ -176,11 +176,9 @@ def process_dynamo_db_response(s3prefix_and_dynamodb_records):
         s3_prefix = s3prefix_and_dynamodb_record.s3_prefix
         records = s3prefix_and_dynamodb_record.dynamodb_records
         if len(records) == 0:
-            raise Exception(
-                f"No records found in dynamo db for the s3_prefix {s3_prefix}"
-            )
+                logger.error(f"No records found in dynamo db for the s3_prefix {s3_prefix}")
         elif len(records) > 1:
-            raise Exception(f"More than 1 record for the s3_prefix {s3_prefix}")
+            logger.error(f"More than 1 record for the s3_prefix {s3_prefix}")
         else:
             try:
                 record = records[0]
@@ -212,10 +210,6 @@ def process_dynamo_db_response(s3prefix_and_dynamodb_records):
                 logger.error(
                     f"Key: {str(ex)} not found when retrieving from dynamodb response"
                 )
-                raise KeyError(
-                    f"Key: {str(ex)} not found when retrieving from dynamodb response"
-                )
-
 
 def start_processing(s3_client, dynamo_records, args):
     """Decrypts, compresses and saves data to the destination

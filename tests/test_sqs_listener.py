@@ -83,47 +83,6 @@ def test_get_to_be_processed_s3_prefixes_wrong_formatted_prefix_2():
     assert len(s3_prefixes) == 0
 
 
-def test_process_dynamo_db_response():
-    records = [S3PrefixAndDynamoRecord(SOURCE_PREFIX_VALUE, [])]
-    with pytest.raises(Exception) as ex:
-        sqs_listener.process_dynamo_db_response(records)
-    assert (
-        str(ex.value)
-        == "No records found in dynamo db for the s3_prefix data-egress-testing/2021-01-10/"
-    )
-
-
-def test_process_dynamo_db_response_1():
-    records = [
-        S3PrefixAndDynamoRecord(
-            SOURCE_PREFIX_VALUE,
-            [
-                {KEY_SOURCE_BUCKET: SOURCE_BUCKET_VALUE},
-                {KEY_SOURCE_BUCKET: SOURCE_BUCKET_VALUE},
-            ],
-        )
-    ]
-    with pytest.raises(Exception) as ex:
-        sqs_listener.process_dynamo_db_response(records)
-    assert (
-        str(ex.value)
-        == "More than 1 record for the s3_prefix data-egress-testing/2021-01-10/"
-    )
-
-
-def test_process_dynamo_db_response_2():
-    records = [
-        S3PrefixAndDynamoRecord(
-            SOURCE_PREFIX_VALUE, [{KEY_DESTINATION_BUCKET: DESTINATION_BUCKET_VALUE}]
-        )
-    ]
-    with pytest.raises(KeyError) as ex:
-        sqs_listener.process_dynamo_db_response(records)
-    assert (
-        str(ex.value)
-        == "\"Key: 'source_bucket' not found when retrieving from dynamodb response\""
-    )
-
 
 @mock_sqs
 @mock_dynamodb2
