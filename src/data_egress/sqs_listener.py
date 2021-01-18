@@ -451,7 +451,8 @@ def assume_role(aws_role_arn, session_name, session_timeout):
 def main():
     """Entry point to the program"""
     args = parse_args()
-    listen(args)
+    s3_client = get_s3_client()
+    listen(args, s3_client)
 
 
 if __name__ == "__main__":
