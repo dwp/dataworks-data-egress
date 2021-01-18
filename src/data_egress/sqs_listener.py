@@ -1,17 +1,29 @@
-from boto3.dynamodb.conditions import Key
-import uuid
-import requests
+import argparse
 import base64
-from Crypto.Cipher import AES
-from Crypto.Util import Counter
-import zlib
+import json
 import logging
 import re
+import zlib
 import boto3
-import sys
+import requests
+from Crypto.Cipher import AES
+from Crypto.Util import Counter
+from boto3.dynamodb.conditions import Key
 from data_egress import logger_utils
-import argparse
 
+S3 = "s3"
+DYNAMODB = "dynamodb"
+LIST_OBJECTS_V2 = "list_objects_v2"
+KEY = "Key"
+CONTENTS = "Contents"
+ENC_EXTENSION = ".enc"
+ITEMS = "Items"
+MESSAGES = "Messages"
+SQS = "sqs"
+ATTRIBUTES = "Attributes"
+NUMBER_OF_MESSAGES = "ApproximateNumberOfMessages"
+ALL = "All"
+BODY = "Body"
 DATA_ENCRYPTION_KEY_ID = "datakeyencryptionkeyid"
 CIPHER_TEXT = "ciphertext"
 IV = "iv"
@@ -26,11 +38,16 @@ REGEX_PATTERN = r"^[\w\/-]*pipeline_success.flag$"
 DATA_EGRESS_DYNAMO_DB_TABLE = "data-egress"
 DYNAMO_DB_ITEM_SOURCE_BUCKET = "source_bucket"
 DYNAMO_DB_ITEM_DESTINATION_BUCKET = "destination_bucket"
+DYNAMO_DB_ITEM_COMPRESS = "compress"
+DYNAMO_DB_ITEM_COMPRESSION_FMT = "compression_fmt"
 DYNAMO_DB_ITEM_SOURCE_PREFIX = "source_prefix"
 DYNAMO_DB_ITEM_DESTINATION_PREFIX = "destination_prefix"
 DYNAMO_DB_ITEM_TRANSFER_TYPE = "transfer_type"
-S3_TRANSFER_TYPE = "s3"
-keys_map = []
+S3_TRANSFER_TYPE = "S3"
+HASH_KEY = "source_prefix"
+RANGE_KEY = "pipeline_name"
+
+keys_map = {}
 
 logger = logging.getLogger("sqs_listener")
 
@@ -42,48 +59,81 @@ class S3PrefixAndDynamoRecord:
 
 
 class DynamoRecord:
-    def __init__(self, source_bucket, source_prefix, destination_bucket, destination_prefix, transfer_type, compression_fmt):
+    def __init__(
+        self,
+        source_bucket,
+        source_prefix,
+        destination_bucket,
+        destination_prefix,
+        transfer_type,
+        compress,
+        compression_fmt,
+        role_arn,
+    ):
         self.source_bucket = source_bucket
         self.source_prefix = source_prefix
         self.destination_bucket = destination_bucket
         self.destination_prefix = destination_prefix
         self.transfer_type = transfer_type
+        self.compress = compress
         self.compression_fmt = compression_fmt
+        self.role_arn = role_arn
 
 
-def receive_message_from_sqs(args):
-    sqs_client = get_client(service_name="sqs")
+def listen(args, s3_client):
+    """Listens to the sqs messages.
+
+    Arguments:
+    args: args like sqs_url , dks url will be passed in it
+    s3_client: s3_client to connect to s3
+    """
+    logger_utils.setup_logging(logger, args.log_level)
+    sqs_client = get_client(service_name=SQS, region_name=args.region_name)
     while True:
-        response = sqs_client.get_queue_attributes(
-            QueueUrl=args.sqs_url, AttributeNames=["ApproximateNumberOfMessages"]
-        )
-        available_msg_coumt = response["Attributes"]["ApproximateNumberOfMessages"]
-        if available_msg_coumt and available_msg_coumt > 0:
-            # TODO Recheck on the attribute names
-            response = sqs_client.receive_message(
-                QueueUrl=args.sqs_url,
-                AttributeNames=["All"]
+        try:
+            response = sqs_client.get_queue_attributes(
+                QueueUrl=args.sqs_url, AttributeNames=[NUMBER_OF_MESSAGES]
             )
-            s3_prefixes = process_messages(response)
-            s3prefix_and_dynamodb_records = query_dymodb(s3_prefixes)
-            dynamo_records = process_dynamo_db_response(s3_prefixes, s3prefix_and_dynamodb_records)
-            start_processing(dynamo_records, args)
+            available_msg_count = int(response[ATTRIBUTES][NUMBER_OF_MESSAGES])
+            logger.info(f"available messages count: {available_msg_count}")
+            if available_msg_count and available_msg_count > 0:
+                response = sqs_client.receive_message(
+                    QueueUrl=args.sqs_url, AttributeNames=[ALL]
+                )
+                logger.debug(f"Response received from queue: {response}")
+                messages = response[MESSAGES]
+                s3_prefixes = get_to_be_processed_s3_prefixes(messages)
+                logger.info(f"s3 prefixes to be processed are : {s3_prefixes}")
+                dynamodb = get_dynamodb_resource(args.region_name)
+                s3prefix_and_dynamodb_records = query_dynamodb(s3_prefixes, dynamodb)
+                dynamo_records = process_dynamo_db_response(
+                    s3prefix_and_dynamodb_records
+                )
+                start_processing(s3_client, dynamo_records, args)
+                if args.is_test:
+                    break
+        except Exception as ex:
+            logger.error(
+                f"Failed to process the messages with s3 prefixes {s3_prefixes}: {str(ex)}"
+            )
+            if args.is_test:
+                break
 
 
-# TODO More than one message wil be received in a single batch
-def process_messages(response):
+def get_to_be_processed_s3_prefixes(messages):
     """Processes response received from listening to sqs.
 
-     Arguments:
-         response: Response received from sqs
-     """
+    Arguments:
+        messages: Response received from sqs
+    """
     s3_prefixes = []
     s3_keys = []
     try:
-        records = response[KEY_RECORDS]
-        for record in records:
-            s3_key = record[KEY_S3][KEY_OBJECT][KEY_KEY]
-            s3_keys.append(s3_key)
+        for message in messages:
+            message_body = json.loads(message[BODY])
+            for event in message_body[KEY_RECORDS]:
+                s3_key = event[KEY_S3][KEY_OBJECT][KEY_KEY]
+                s3_keys.append(s3_key)
     except Exception as ex:
         logger.error(
             f"Key: {str(ex)} not found when retrieving the prefix from sqs message"
@@ -100,19 +150,19 @@ def process_messages(response):
     return s3_prefixes
 
 
-def query_dymodb(s3_prefixes):
+def query_dynamodb(s3_prefixes, dynamodb):
     """Query  DynamoDb status table for a given correlation id.
 
     Arguments:
         s3_prefixes (string): source bucket prefixes to query dynamo db table
     """
-    dynamodb_client = get_client(service_name="dynamodb")
-    table = dynamodb_client.Table(DATA_EGRESS_DYNAMO_DB_TABLE)
+    table = dynamodb.Table(DATA_EGRESS_DYNAMO_DB_TABLE)
     s3prefix_and_dynamodb_records = []
     for s3_prefix in s3_prefixes:
-        response = table.query(KeyConditionExpression=Key("source_prefix").eq(s3_prefix))
-        S3PrefixAndDynamoRecord(s3_prefix, response["Items"])
-        s3prefix_and_dynamodb_records.append(S3PrefixAndDynamoRecord)
+        response = table.query(KeyConditionExpression=Key(HASH_KEY).eq(s3_prefix))
+        items = response[ITEMS]
+        logger.info(f"dynamodb items for {s3_prefix}: {items}")
+        s3prefix_and_dynamodb_records.append(S3PrefixAndDynamoRecord(s3_prefix, items))
     return s3prefix_and_dynamodb_records
 
 
@@ -123,10 +173,12 @@ def process_dynamo_db_response(s3prefix_and_dynamodb_records):
     s3prefix_and_dynamodb_records: List of records found in dynamo db for the query
     """
     for s3prefix_and_dynamodb_record in s3prefix_and_dynamodb_records:
-        records = s3prefix_and_dynamodb_record.dynamodb_records
         s3_prefix = s3prefix_and_dynamodb_record.s3_prefix
+        records = s3prefix_and_dynamodb_record.dynamodb_records
         if len(records) == 0:
-            raise Exception(f"No records found in dynamo db for the s3_prefix {s3_prefix}")
+            raise Exception(
+                f"No records found in dynamo db for the s3_prefix {s3_prefix}"
+            )
         elif len(records) > 1:
             raise Exception(f"More than 1 record for the s3_prefix {s3_prefix}")
         else:
@@ -136,10 +188,25 @@ def process_dynamo_db_response(s3prefix_and_dynamodb_records):
                 source_bucket = record[DYNAMO_DB_ITEM_SOURCE_BUCKET]
                 source_prefix = record[DYNAMO_DB_ITEM_SOURCE_PREFIX]
                 transfer_type = record[DYNAMO_DB_ITEM_TRANSFER_TYPE]
+                logger.info(f"{source_bucket} {source_prefix}")
                 if transfer_type == S3_TRANSFER_TYPE:
                     destination_bucket = record[DYNAMO_DB_ITEM_DESTINATION_BUCKET]
                     destination_prefix = record[DYNAMO_DB_ITEM_DESTINATION_PREFIX]
-                    dynamo_records.append(DynamoRecord(source_bucket, source_prefix, destination_bucket, destination_prefix, transfer_type))
+                    compress = record[DYNAMO_DB_ITEM_COMPRESS]
+                    compression_fmt = record[DYNAMO_DB_ITEM_COMPRESSION_FMT]
+                    role_arn = record["role_arn"]
+                    dynamo_records.append(
+                        DynamoRecord(
+                            source_bucket,
+                            source_prefix,
+                            destination_bucket,
+                            destination_prefix,
+                            transfer_type,
+                            compress,
+                            compression_fmt,
+                            role_arn,
+                        )
+                    )
                     return dynamo_records
             except Exception as ex:
                 logger.error(
@@ -150,12 +217,18 @@ def process_dynamo_db_response(s3prefix_and_dynamodb_records):
                 )
 
 
-def start_processing(dynamo_records, args):
-    s3_client = get_client(service="s3")
+def start_processing(s3_client, dynamo_records, args):
+    """Decrypts, compresses and saves data to the destination
+
+    Arguments:
+    s3_client: Client to connect to s3
+    dynamo_records: Records looked up in dynamodb table for s3 prefixes
+    args: args passed from client
+    """
     for dynamo_record in dynamo_records:
         source_bucket = dynamo_record.source_bucket
         source_prefix = dynamo_record.source_prefix
-        keys = get_all_s3_keys(source_bucket, source_prefix)
+        keys = get_all_s3_keys(s3_client, source_bucket, source_prefix)
         for key in keys:
             s3_object = s3_client.get_object(Bucket=source_bucket, Key=key)
             iv = s3_object[METADATA][IV]
@@ -164,42 +237,67 @@ def start_processing(dynamo_records, args):
             plain_text_key = get_plaintext_key_calling_dks(
                 ciphertext, datakeyencryptionkeyid, args
             )
-            streaming_data = s3_client.get_object(Bucket=source_bucket, Key=key)["Body"]
-            decrypted_stream = decrypt(plain_text_key, iv, streaming_data)
-            compress(decrypted_stream)
-            credentials_dict = assume_role()
-            boto3.session.Session(
-                aws_access_key_id=credentials_dict["AccessKeyId"],
-                aws_secret_access_key=credentials_dict["SecretAccessKey"],
-                aws_session_token=credentials_dict["SessionToken"],
-            )
+            streaming_data = s3_client.get_object(Bucket=source_bucket, Key=key)[BODY]
+            data = decrypt(plain_text_key, iv, streaming_data)
+            if dynamo_record.compress:
+                data = compress(data)
             file_name = key.replace(source_prefix, "")
+            file_name_without_enc = file_name.replace(ENC_EXTENSION, "")
             destination_bucket = dynamo_record.destination_bucket
             destination_prefix = dynamo_record.destination_prefix
-            save(s3_client, file_name, destination_bucket, destination_prefix)
+            role_arn = dynamo_record.role_arn
+            sts_response = assume_role(role_arn, "session_name", 3600)
+            s3_client_with_assumed_role = get_s3_client_with_assumed_role(sts_response)
+            save(
+                s3_client_with_assumed_role,
+                file_name_without_enc,
+                destination_bucket,
+                destination_prefix,
+                data,
+            )
 
 
-def get_all_s3_keys(source_bucket, source_prefix):
-    s3_client = get_client(service="s3")
+def get_all_s3_keys(s3_client, source_bucket, source_prefix):
+    """Decrypts, compresses and saves data to the destination
+
+    Arguments:
+    s3_client: Client to connect to s3
+    source_bucket: source bucket
+    source_prefix: prefix of the source bucket
+    """
     keys = []
-    paginator = s3_client.get_paginator("list_objects_v2")
+    paginator = s3_client.get_paginator(LIST_OBJECTS_V2)
     pages = paginator.paginate(Bucket=source_bucket, Prefix=source_prefix)
     for page in pages:
-        for obj in page["Contents"]:
-            keys.append(obj["Key"])
+        for obj in page[CONTENTS]:
+            keys.append(obj[KEY])
     return keys
 
 
 def get_plaintext_key_calling_dks(encryptedkey, keyencryptionkeyid, args):
+    """Gets plain text key to decrypt from dks
+
+    Arguments:
+    encryptedkey: Encrypted key from metadata
+    keyencryptionkeyid: key encryption key of the envelope encryption taken from metadata
+    args: args passed from client
+    """
     if keys_map.get(encryptedkey):
         key = keys_map[encryptedkey]
     else:
-        key = call_dks(encryptedkey, keyencryptionkeyid)
+        key = call_dks(encryptedkey, keyencryptionkeyid, args)
         keys_map[encryptedkey] = key
     return key
 
 
 def call_dks(cek, kek, args):
+    """Gets plain text key to decrypt from dks
+
+    Arguments:
+    cek: content encryption key
+    kek: key encryption key of the envelope encryption taken from metadata
+    args: args passed from client
+    """
     try:
         url = args.dks_url
         params = {"keyId": kek}
@@ -220,67 +318,107 @@ def call_dks(cek, kek, args):
 
 
 def decrypt(plain_text_key, iv_key, data):
+    """Gets plain text key to decrypt from dks
+
+    Arguments:
+    plain_text_key: plain key retrieved from dks
+    iv_key: initialisation vector
+    data: unencrypted data
+    """
     try:
         iv_int = int(base64.b64decode(iv_key).hex(), 16)
         ctr = Counter.new(AES.block_size * 8, initial_value=iv_int)
         aes = AES.new(base64.b64decode(plain_text_key), AES.MODE_CTR, counter=ctr)
-        decrypted = aes.decrypt(data)
+        decrypted = aes.decrypt(data.read())
+        return decrypted
     except BaseException as ex:
         logger.error(f"Problem decrypting data {str(ex)}")
-    return decrypted
 
 
-def compress(decrypted_stream):
-    return zlib.compress(decrypted_stream, 16 + zlib.MAX_WBITS)
+def compress(decrypted):
+    """Compresses the data
 
-
-# TODO make comepression format dynamic
-def save(s3_client, file_name, destination_bucket, destination_prefix):
-    with open(file_name, "rb") as data:
-        s3_client.upload_fileobj(
-            data,
-            destination_bucket,
-            f"{destination_prefix}/{file_name}.gz",
-            ExtraArgs={"Metadata": ""},
-        )
-
-
-def assume_role():
-    """Assumes the role needed for the boto3 session.
-
-    Keyword arguments:
-    profile -- the profile name to use (if None, default profile is used)
+    Arguments:
+    decrypted: Decrypted bytes
     """
-    global aws_role_arn
-    global aws_session_timeout_seconds
-    global boto3_session
-
-    if aws_role_arn is None or aws_session_timeout_seconds is None:
-        raise AssertionError("abc")
-
-    session_name = "data_egress" + str(uuid.uuid4())
-    sts_client = boto3_session.client("sts")
-    assume_role_dict = {}
-    sts_client.assume_role(
-    RoleArn=aws_role_arn,
-    RoleSessionName=f"{session_name}",
-    DurationSeconds=int(aws_session_timeout_seconds)),
-
-    return assume_role_dict["Credentials"]
+    logger.info(f"decrypted: {decrypted}")
+    compress = zlib.compressobj(9, zlib.DEFLATED, 16 + zlib.MAX_WBITS)
+    compressed_data = compress.compress(decrypted)
+    compressed_data += compress.flush()
+    return compressed_data
 
 
-def get_client(service_name):
-    client = boto3.client(service_name)
+def save(s3_client, file_name, destination_bucket, destination_prefix, data):
+    """Compresses the data
+
+    Arguments:
+    s3_client: client to connect to s3
+    file_name: Name of the file in the destination bucket
+    destination_bucket: destination bucket
+    destination_prefix: destination prefix
+    data: Data to be uploaded
+    """
+    try:
+        key = f"{destination_prefix}{file_name}.gz"
+        response = s3_client.put_object(
+            Body=data,
+            Bucket=destination_bucket,
+            Key=key,
+        )
+        logger.info(f"Saved key: {key} in destination bucket {destination_bucket}")
+    except Exception as ex:
+        logger.error(f"Exception while saving {str(ex)}")
+
+
+def get_client(service_name, region_name):
+    """gets Boto3 client
+
+    Arguments:
+    service_name: service name
+    region_name: region name
+    """
+    client = boto3.client(service_name, region_name)
     return client
+
+
+def get_dynamodb_resource(region_name):
+    """gets Dynamodb client
+
+    Arguments:
+    region_name: region name
+    """
+    return boto3.resource(DYNAMODB, region_name=region_name)
+
+
+def get_s3_client():
+    """gets S3 client"""
+    return boto3.client(S3)
+
+
+# is region needed?
+def get_s3_client_with_assumed_role(sts_reponse):
+    """gets S3 client
+      Arguments:
+    sts_reponse: response from sts service
+    """
+    access_key_id = sts_reponse["AccessKeyId"]
+    secret_access_key = sts_reponse["SecretAccessKey"]
+    session_token = sts_reponse["SessionToken"]
+    logger.info(f"session : {access_key_id} {secret_access_key} {session_token}")
+    return boto3.client(
+        "s3",
+        aws_access_key_id=access_key_id,
+        aws_secret_access_key=secret_access_key,
+        aws_session_token=session_token,
+    )
 
 
 def parse_args():
     """Define and parse command line args."""
 
     parser = argparse.ArgumentParser(
-    description="Receive args provided to spark submit job"
+        description="Receive args provided to spark submit job"
     )
-
     # Parse command line inputs and set defaults
     parser.add_argument("--sqs_url", default="")
     parser.add_argument("--dks_url", default="")
@@ -288,21 +426,32 @@ def parse_args():
     return parser.parse_args()
 
 
-def _main(args):
-    args = parse_args(args)
-    logger_utils.setup_logging(logger, args.log_level)
-    receive_message_from_sqs(args)
+def assume_role(aws_role_arn, session_name, session_timeout):
+    """Assumes the role needed for the boto3 session.
+
+    Keyword arguments:
+    aws_role_arn: Role to be assumed
+    session_name: Name of the boto3 session
+    session_timeout: timeout for the session
+    """
+    logger.info(f"role arn is {aws_role_arn}")
+    try:
+        sts_client = boto3.client("sts")
+        assume_role_dict = sts_client.assume_role(
+            RoleArn=aws_role_arn,
+            RoleSessionName=session_name,
+            DurationSeconds=session_timeout,
+        )
+
+        return assume_role_dict["Credentials"]
+    except Exception as ex:
+        logger.error(f"error while assuming role {str(ex)}")
 
 
 def main():
-    """Start of CLI script.
-
-    This is called by setuptools entrypoint, so is not able to take any arguments.
-    In order to support automated testing of CLI parsing, this just wraps _main()
-    which enables args to be passed in.
-
-    """
-    _main(sys.argv[1:])
+    """Entry point to the program"""
+    args = parse_args()
+    listen(args)
 
 
 if __name__ == "__main__":
