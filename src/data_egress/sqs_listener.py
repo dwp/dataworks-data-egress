@@ -176,11 +176,9 @@ def process_dynamo_db_response(s3prefix_and_dynamodb_records):
         s3_prefix = s3prefix_and_dynamodb_record.s3_prefix
         records = s3prefix_and_dynamodb_record.dynamodb_records
         if len(records) == 0:
-            raise Exception(
-                f"No records found in dynamo db for the s3_prefix {s3_prefix}"
-            )
+            logger.error(f"No records found in dynamo db for the s3_prefix {s3_prefix}")
         elif len(records) > 1:
-            raise Exception(f"More than 1 record for the s3_prefix {s3_prefix}")
+            logger.error(f"More than 1 record for the s3_prefix {s3_prefix}")
         else:
             try:
                 record = records[0]
@@ -210,9 +208,6 @@ def process_dynamo_db_response(s3prefix_and_dynamodb_records):
                     return dynamo_records
             except Exception as ex:
                 logger.error(
-                    f"Key: {str(ex)} not found when retrieving from dynamodb response"
-                )
-                raise KeyError(
                     f"Key: {str(ex)} not found when retrieving from dynamodb response"
                 )
 
@@ -451,7 +446,8 @@ def assume_role(aws_role_arn, session_name, session_timeout):
 def main():
     """Entry point to the program"""
     args = parse_args()
-    listen(args)
+    s3_client = get_s3_client()
+    listen(args, s3_client)
 
 
 if __name__ == "__main__":
