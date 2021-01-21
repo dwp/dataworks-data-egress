@@ -417,6 +417,8 @@ def parse_args():
     # Parse command line inputs and set defaults
     parser.add_argument("--sqs_url", default="")
     parser.add_argument("--dks_url", default="")
+    parser.add_argument("--log_level", default=logging.INFO)
+    parser.add_argument("--region_name", default="eu-west-2")
 
     return parser.parse_args()
 

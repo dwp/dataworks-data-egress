@@ -1,9 +1,9 @@
 FROM python:3.8-alpine3.10
 
-WORKDIR /src
-COPY src/ /app
+WORKDIR /
+COPY ./ /app
+WORKDIR /app
 RUN apk --update --no-cache add gcc musl-dev libffi-dev openssl-dev
-RUN pip install --no-cache-dir -r /app/requirements.txt
+RUN python setup.py install
 
-WORKDIR /app/data_egress
-ENTRYPOINT ["python", "sqs_listener.py"]
+ENTRYPOINT ["python", "/usr/local/bin/sqs-listener"]
