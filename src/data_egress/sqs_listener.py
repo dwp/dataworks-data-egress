@@ -235,9 +235,11 @@ def start_processing(s3_client, dynamo_records, args):
         keys = get_all_s3_keys(s3_client, source_bucket, source_prefix)
         for key in keys:
             s3_object = s3_client.get_object(Bucket=source_bucket, Key=key)
-            iv = s3_object[METADATA][IV]
-            ciphertext = s3_object[METADATA][CIPHER_TEXT]
-            datakeyencryptionkeyid = s3_object[METADATA][DATA_ENCRYPTION_KEY_ID]
+            metadata = s3_object[METADATA]
+            logger.info(f"Metadata for the s3 key : {metadata}")
+            iv = metadata[IV]
+            ciphertext = metadata[CIPHER_TEXT]
+            datakeyencryptionkeyid = metadata[DATA_ENCRYPTION_KEY_ID]
             plain_text_key = get_plaintext_key_calling_dks(
                 ciphertext, datakeyencryptionkeyid, args
             )
