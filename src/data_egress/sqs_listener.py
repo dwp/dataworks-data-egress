@@ -277,7 +277,9 @@ def get_all_s3_keys(s3_client, source_bucket, source_prefix):
     pages = paginator.paginate(Bucket=source_bucket, Prefix=source_prefix)
     for page in pages:
         for obj in page[CONTENTS]:
-            keys.append(obj[KEY])
+            key = obj[KEY]
+            if PIPELINE_SUCCESS_FLAG not in key:
+                keys.append(key)
     return keys
 
 
