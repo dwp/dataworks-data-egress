@@ -309,6 +309,7 @@ def call_dks(cek, kek, args):
         content = result.json()
     except BaseException as ex:
         logger.error(f"Problem calling DKS {str(ex)}")
+        return
     return content["plaintextDataKey"]
 
 
