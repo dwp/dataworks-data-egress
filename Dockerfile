@@ -14,7 +14,6 @@ RUN addgroup $GROUP_NAME
 RUN adduser --system --ingroup $GROUP_NAME $USER_NAME
 
 RUN chown -R $USER_NAME.$GROUP_NAME /var
-RUN chown -R $USER_NAME.$GROUP_NAME /etc/pki/
 RUN chmod a+rw /var/log
 USER $USER_NAME
 
