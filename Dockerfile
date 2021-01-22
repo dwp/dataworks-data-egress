@@ -6,5 +6,5 @@ WORKDIR /app
 RUN apk --update --no-cache add gcc musl-dev libffi-dev openssl-dev
 RUN python setup.py install
 
-ENTRYPOINT ["entrypoint.sh"]
+ENTRYPOINT ["./entrypoint.sh"]
 CMD ["python", "/usr/local/bin/sqs-listener"]
