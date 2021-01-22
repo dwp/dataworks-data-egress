@@ -3,6 +3,7 @@ import base64
 import json
 import logging
 import re
+import os
 import zlib
 import boto3
 import requests
@@ -420,8 +421,16 @@ def parse_args():
     parser.add_argument("--dks_url", default="")
     parser.add_argument("--log_level", default="INFO")
     parser.add_argument("--region_name", default="eu-west-2")
+    parser.add_argument("--is_test", default="False")
 
-    return parser.parse_args()
+    args = parser.parse_args()
+    if "sqs_url" in os.environ:
+        args.sqs_url = os.environ["sqs_url"]
+
+    if "dks_url" in os.environ:
+        args.dks_url = os.environ["dks_url"]
+
+    return args
 
 
 def assume_role(aws_role_arn, session_name, session_timeout):
