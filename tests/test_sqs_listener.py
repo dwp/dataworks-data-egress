@@ -272,7 +272,6 @@ def create_policy(iam_client):
         print(f"Error while creating policy {str(ex)}")
 
 
-
 def attach_policy(iam_client, policy_arn):
     try:
         iam_client.attach_role_policy(
