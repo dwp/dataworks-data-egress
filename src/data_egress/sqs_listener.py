@@ -233,6 +233,7 @@ def start_processing(s3_client, dynamo_records, args):
         source_bucket = dynamo_record.source_bucket
         source_prefix = dynamo_record.source_prefix
         keys = get_all_s3_keys(s3_client, source_bucket, source_prefix)
+        logger.info(f"Processing keys: {keys} for the prefix: {source_prefix}")
         for key in keys:
             s3_object = s3_client.get_object(Bucket=source_bucket, Key=key)
             metadata = s3_object[METADATA]
