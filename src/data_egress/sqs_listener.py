@@ -279,7 +279,7 @@ def get_all_s3_keys(s3_client, source_bucket, source_prefix):
     for page in pages:
         for obj in page[CONTENTS]:
             key = obj[KEY]
-            if PIPELINE_SUCCESS_FLAG not in key:
+            if (PIPELINE_SUCCESS_FLAG not in key) and (source_prefix != key):
                 keys.append(key)
     return keys
 
