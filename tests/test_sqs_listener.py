@@ -216,7 +216,7 @@ def create_iam_role():
     iam_client = boto3.client(SERVICE_IAM)
     trust_relationship_policy_another_iam_user = trust_relationship()
     role = create_role(iam_client, trust_relationship_policy_another_iam_user)
-    policy_arn = create_policy(iam_client, role["Role"]["Arn"])
+    policy_arn = create_policy(iam_client)
     attach_policy(iam_client, policy_arn)
 
 

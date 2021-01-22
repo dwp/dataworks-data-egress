@@ -309,6 +309,7 @@ def call_dks(cek, kek, args):
         content = result.json()
     except BaseException as ex:
         logger.error(f"Problem calling DKS {str(ex)}")
+        return
     return content["plaintextDataKey"]
 
 
@@ -414,9 +415,11 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Receive args provided to spark submit job"
     )
-    # Parse command line inputs and set defaults
+    # Parse command line inputs and set defaults90
     parser.add_argument("--sqs_url", default="")
     parser.add_argument("--dks_url", default="")
+    parser.add_argument("--log_level", default="INFO")
+    parser.add_argument("--region_name", default="eu-west-2")
 
     return parser.parse_args()
 
