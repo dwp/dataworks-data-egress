@@ -193,6 +193,9 @@ def process_dynamo_db_response(s3prefix_and_dynamodb_records):
                 if transfer_type == S3_TRANSFER_TYPE:
                     destination_bucket = record[DYNAMO_DB_ITEM_DESTINATION_BUCKET]
                     destination_prefix = record[DYNAMO_DB_ITEM_DESTINATION_PREFIX]
+                compress = None
+                compression_fmt = None
+                role_arn = None
                 if DYNAMO_DB_ITEM_COMPRESS in record:
                     compress = record[DYNAMO_DB_ITEM_COMPRESS]
                     if compress:
