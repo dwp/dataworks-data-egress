@@ -12,6 +12,8 @@ from Crypto.Util import Counter
 from boto3.dynamodb.conditions import Key
 from data_egress import logger_utils
 
+ROLE_ARN = "role_arn"
+
 S3 = "s3"
 DYNAMODB = "dynamodb"
 LIST_OBJECTS_V2 = "list_objects_v2"
@@ -67,9 +69,9 @@ class DynamoRecord:
         destination_bucket,
         destination_prefix,
         transfer_type,
-        compress,
-        compression_fmt,
-        role_arn,
+        compress=None,
+        compression_fmt=None,
+        role_arn=None,
     ):
         self.source_bucket = source_bucket
         self.source_prefix = source_prefix
@@ -191,22 +193,25 @@ def process_dynamo_db_response(s3prefix_and_dynamodb_records):
                 if transfer_type == S3_TRANSFER_TYPE:
                     destination_bucket = record[DYNAMO_DB_ITEM_DESTINATION_BUCKET]
                     destination_prefix = record[DYNAMO_DB_ITEM_DESTINATION_PREFIX]
+                if DYNAMO_DB_ITEM_COMPRESS in record:
                     compress = record[DYNAMO_DB_ITEM_COMPRESS]
-                    compression_fmt = record[DYNAMO_DB_ITEM_COMPRESSION_FMT]
-                    role_arn = record["role_arn"]
-                    dynamo_records.append(
-                        DynamoRecord(
-                            source_bucket,
-                            source_prefix,
-                            destination_bucket,
-                            destination_prefix,
-                            transfer_type,
-                            compress,
-                            compression_fmt,
-                            role_arn,
-                        )
+                    if compress:
+                        compression_fmt = record[DYNAMO_DB_ITEM_COMPRESSION_FMT]
+                if ROLE_ARN in record:
+                    role_arn = record[ROLE_ARN]
+                dynamo_records.append(
+                    DynamoRecord(
+                        source_bucket,
+                        source_prefix,
+                        destination_bucket,
+                        destination_prefix,
+                        transfer_type,
+                        compress,
+                        compression_fmt,
+                        role_arn,
                     )
-                    return dynamo_records
+                )
+                return dynamo_records
             except Exception as ex:
                 logger.error(
                     f"Key: {str(ex)} not found when retrieving from dynamodb response"
@@ -235,17 +240,18 @@ def start_processing(s3_client, dynamo_records, args):
             )
             streaming_data = s3_client.get_object(Bucket=source_bucket, Key=key)[BODY]
             data = decrypt(plain_text_key, iv, streaming_data)
-            if dynamo_record.compress:
+            if dynamo_record.compress is not None and dynamo_record.compress:
                 data = compress(data)
             file_name = key.replace(source_prefix, "")
             file_name_without_enc = file_name.replace(ENC_EXTENSION, "")
             destination_bucket = dynamo_record.destination_bucket
             destination_prefix = dynamo_record.destination_prefix
             role_arn = dynamo_record.role_arn
-            sts_response = assume_role(role_arn, "session_name", 3600)
-            s3_client_with_assumed_role = get_s3_client_with_assumed_role(sts_response)
+            if role_arn is not None:
+                sts_response = assume_role(role_arn, "session_name", 3600)
+                s3_client = get_s3_client_with_assumed_role(sts_response)
             save(
-                s3_client_with_assumed_role,
+                s3_client,
                 file_name_without_enc,
                 destination_bucket,
                 destination_prefix,
