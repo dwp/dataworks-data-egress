@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
 set -e
 
@@ -6,7 +6,7 @@ export HTTP_PROXY="http://${internet_proxy}:3128"
 export HTTPS_PROXY="$HTTP_PROXY"
 export NO_PROXY="${non_proxied_endpoints},${dks_fqdn}"
 
-ACM_KEY_PASSWORD=$(uuidgen -r)
+export ACM_KEY_PASSWORD=$(uuidgen -r)
 echo "Retrieving acm certs"
 acm-cert-retriever \
 --acm-cert-arn "${acm_cert_arn}" \
