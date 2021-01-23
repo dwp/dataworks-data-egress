@@ -6,8 +6,6 @@ WORKDIR /app
 
 
 ENV acm_cert_helper_version="0.37.0"
-
-ENV acm_cert_helper_version="0.37.0"
 RUN echo "===> Installing Dependencies ..." \
     && echo "===> Updating base packages ..." \
     && apk update \
@@ -19,16 +17,21 @@ RUN echo "===> Installing Dependencies ..." \
     && apk add --no-cache g++ gcc musl-dev libffi-dev openssl-dev gcc \
     && pip3 install https://github.com/dwp/acm-pca-cert-generator/releases/download/${acm_cert_helper_version}/acm_cert_helper-${acm_cert_helper_version}.tar.gz \
     && echo "==Dependencies done=="
+RUN python setup.py install
 
 # Set user to run the process as in the docker contianer
-ENV USER_NAME=data_egress
-ENV GROUP_NAME=data_egress
+ENV USER_NAME=degr
+ENV GROUP_NAME=degr
 
 RUN addgroup $GROUP_NAME
 RUN adduser --system --ingroup $GROUP_NAME $USER_NAME
-
+RUN chown -R $USER_NAME.$GROUP_NAME /etc/ssl/
+RUN chown -R $USER_NAME.$GROUP_NAME /usr/local/share/ca-certificates/
+RUN chown -R $USER_NAME.$GROUP_NAME /app
 RUN chown -R $USER_NAME.$GROUP_NAME /var
 RUN chmod a+rw /var/log
+RUN chmod -R a+rwx /etc/ssl/
+RUN chmod -R a+rwx /usr/local/share/ca-certificates/
 USER $USER_NAME
 
 

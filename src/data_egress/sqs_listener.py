@@ -316,10 +316,10 @@ def call_dks(cek, kek, args):
             params=params,
             data=cek,
             cert=(
-                "/etc/pki/tls/certs/private_key.crt",
-                "/etc/pki/tls/private/private_key.key",
+                "/etc/ssl/certs/data_egress.crt",
+                "/etc/ssl/private/data_egress.key",
             ),
-            verify="/etc/pki/ca-trust/source/anchors/analytical_ca.pem",
+            verify="/usr/local/share/ca-certificates/data_egress_ca.pem",
         )
         content = result.json()
     except BaseException as ex:
