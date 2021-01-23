@@ -3,8 +3,22 @@ FROM python:3.8-alpine3.10
 WORKDIR /
 COPY ./ /app
 WORKDIR /app
-RUN apk --update --no-cache add gcc musl-dev libffi-dev openssl-dev util-linux
-RUN python setup.py install
+
+
+ENV acm_cert_helper_version="0.37.0"
+
+ENV acm_cert_helper_version="0.37.0"
+RUN echo "===> Installing Dependencies ..." \
+    && echo "===> Updating base packages ..." \
+    && apk update \
+    && apk upgrade \
+    && echo "==Update done==" \
+    && apk add --no-cache ca-certificates \
+    && apk add --no-cache util-linux \
+    && echo "===> Installing acm_pca_cert_generator ..." \
+    && apk add --no-cache g++ gcc musl-dev libffi-dev openssl-dev gcc \
+    && pip3 install https://github.com/dwp/acm-pca-cert-generator/releases/download/${acm_cert_helper_version}/acm_cert_helper-${acm_cert_helper_version}.tar.gz \
+    && echo "==Dependencies done=="
 
 # Set user to run the process as in the docker contianer
 ENV USER_NAME=data_egress
