@@ -208,7 +208,7 @@ def encrypt(initialisation_vector, datakey, unencrypted_bytes):
 def mock_args():
     args = argparse.Namespace()
     args.log_level = logging.INFO
-    args.is_test = True
+    args.is_prod = False
     return args
 
 

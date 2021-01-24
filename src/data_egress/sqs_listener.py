@@ -113,13 +113,13 @@ def listen(args, s3_client):
                     s3prefix_and_dynamodb_records
                 )
                 start_processing(s3_client, dynamo_records, args)
-                if args.is_test:
+                if not args.is_prod:
                     break
         except Exception as ex:
             logger.error(
                 f"Failed to process the messages with s3 prefixes {s3_prefixes}: {str(ex)}"
             )
-            if args.is_test:
+            if not args.is_prod:
                 break
 
 
@@ -436,7 +436,7 @@ def parse_args():
     parser.add_argument("--dks_url", default="")
     parser.add_argument("--log_level", default="INFO")
     parser.add_argument("--region_name", default="eu-west-2")
-    parser.add_argument("--is_test", default="False")
+    parser.add_argument("--is_prod", default=True)
 
     args = parser.parse_args()
     if "sqs_url" in os.environ:
