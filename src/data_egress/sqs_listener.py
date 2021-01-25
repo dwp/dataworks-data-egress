@@ -309,7 +309,7 @@ def call_dks(cek, kek, args):
     args: args passed from client
     """
     try:
-        url = args.dks_url
+        url = f"{args.dks_url}/datakey/actions/decrypt"
         params = {"keyId": kek}
         result = requests.post(
             url,
@@ -371,6 +371,7 @@ def save(s3_client, file_name, destination_bucket, destination_prefix, data):
     """
     try:
         key = f"{destination_prefix}{file_name}.gz"
+        logger.info(f"saving to bucket:{destination_bucket} with key: {key}")
         response = s3_client.put_object(
             Body=data,
             Bucket=destination_bucket,
