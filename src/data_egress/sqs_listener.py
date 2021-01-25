@@ -90,7 +90,7 @@ def listen(args, s3_client):
     args: args like sqs_url , dks url will be passed in it
     s3_client: s3_client to connect to s3
     """
-    logger_utils.setup_logging(logger, args.log_level)
+    logger_utils.setup_logging(args)
     sqs_client = get_client(service_name=SQS, region_name=args.region_name)
     while True:
         try:
@@ -436,6 +436,8 @@ def parse_args():
     parser.add_argument("--log_level", default="INFO")
     parser.add_argument("--region_name", default="eu-west-2")
     parser.add_argument("--is_test", default="False")
+    parser.add_argument("--environment", default="NOT_SET")
+    parser.add_argument("--application", default="NOT_SET")
 
     args = parser.parse_args()
     if "sqs_url" in os.environ:
@@ -443,6 +445,11 @@ def parse_args():
 
     if "dks_url" in os.environ:
         args.dks_url = os.environ["dks_url"]
+
+    if "ENVIRONMENT" in os.environ:
+        args.environment = os.environ["ENVIRONMENT"]
+    if "APPLICATION" in os.environ:
+        args.application = os.environ["APPLICATION"]
 
     return args
 

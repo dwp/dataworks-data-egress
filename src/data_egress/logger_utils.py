@@ -3,17 +3,34 @@
 """Common logging functions."""
 import boto3
 import logging
+import socket
+import sys
 
 
-def setup_logging(logger, log_level):
-    """
-    Configure the logger and boto3 to match.
+def setup_logging(args):
 
-    Args:
-        logger (Object): The target to configure
-        log_level (str): The log level
-    """
-    level = logging.getLevelName(log_level)
-    logger.setLevel(level)
-    boto3.set_stream_logger("", level)
-    logger.info("Logging level set to {}".format(log_level))
+    the_logger = logging.getLogger()
+    for old_handler in the_logger.handlers:
+        the_logger.removeHandler(old_handler)
+
+    new_handler = logging.StreamHandler(sys.stdout)
+
+    hostname = socket.gethostname()
+
+    json_format = (
+        '{ "timestamp": "%(asctime)s", "log_level": "%(levelname)s", "message": "%(message)s", '
+        f'"environment": "{args.environment}", "application": "{args.application}", '
+        f'"module": "%(module)s", "process": "%(process)s", '
+        f'"thread": "[%(thread)s]", "hostname": "{hostname}" }} '
+    )
+
+    new_handler.setFormatter(logging.Formatter(json_format))
+    the_logger.addHandler(new_handler)
+    new_level = logging.getLevelName(args.log_level.upper())
+    the_logger.setLevel(new_level)
+
+    if the_logger.isEnabledFor(logging.DEBUG):
+        boto3.set_stream_logger()
+        the_logger.debug(f'Using boto3", "version": "{boto3.__version__}')
+
+    return the_logger
