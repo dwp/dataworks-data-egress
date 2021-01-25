@@ -207,10 +207,10 @@ def encrypt(initialisation_vector, datakey, unencrypted_bytes):
 
 def mock_args():
     args = argparse.Namespace()
-    args.log_level = 'INFO'
+    args.log_level = "INFO"
     args.is_test = True
-    args.environment = 'Test'
-    args.application = 'data-egress'
+    args.environment = "Test"
+    args.application = "data-egress"
     return args
 
 
