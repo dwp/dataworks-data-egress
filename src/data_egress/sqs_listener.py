@@ -25,6 +25,7 @@ MESSAGES = "Messages"
 SQS = "sqs"
 ATTRIBUTES = "Attributes"
 NUMBER_OF_MESSAGES = "ApproximateNumberOfMessages"
+APPROXIMATE_RECEIVE_COUNT = "ApproximateReceiveCount"
 ALL = "All"
 BODY = "Body"
 DATA_ENCRYPTION_KEY_ID = "datakeyencryptionkeyid"
@@ -107,15 +108,21 @@ def listen(args, s3_client):
                 )
                 logger.debug(f"Response received from queue: {response}")
                 messages = response[MESSAGES]
-                s3_prefixes = get_to_be_processed_s3_prefixes(messages)
-                logger.info(f"s3 prefixes to be processed are : {s3_prefixes}")
-                dynamodb = get_dynamodb_resource(args.region_name)
-                s3prefix_and_dynamodb_records = query_dynamodb(s3_prefixes, dynamodb)
-                dynamo_records = process_dynamo_db_response(
-                    s3prefix_and_dynamodb_records
-                )
-                start_processing(s3_client, dynamo_records, args)
-                delete_message_from_sqs(sqs_client, args.sqs_url, messages)
+                s3_prefixes = []
+                for message in messages:
+                    previous_deliveries_count = int(message[ATTRIBUTES][APPROXIMATE_RECEIVE_COUNT])
+                    if previous_deliveries_count > args.max_retries:
+                        logger.warn(f"message: {message[KEY_MESSAGE_ID]} previously delivered: {previous_deliveries_count} more than max retries: {args.max_retries}")
+                        # configure in future dlq to receive if message processing fails more than configured retries
+                    s3_prefixes = get_to_be_processed_s3_prefixes(message)
+                    logger.info(f"s3 prefixes to be processed are : {s3_prefixes}")
+                    dynamodb = get_dynamodb_resource(args.region_name)
+                    s3prefix_and_dynamodb_records = query_dynamodb(s3_prefixes, dynamodb)
+                    dynamo_records = process_dynamo_db_response(
+                        s3prefix_and_dynamodb_records
+                    )
+                    start_processing(s3_client, dynamo_records, args)
+                    delete_message_from_sqs(sqs_client, args.sqs_url, message)
                 if args.is_test:
                     break
         except Exception as ex:
@@ -126,42 +133,40 @@ def listen(args, s3_client):
                 break
 
 
-def delete_message_from_sqs(sqs_client, sqs_url, messages):
+def delete_message_from_sqs(sqs_client, sqs_url, message):
     """Delete processed messages from sqs to prevent duplication.
 
     Arguments:
         sqs_client: SQS client object
         sqs_url: SQS queue URL
-        messages: Response received from sqs
+        message: Response received from sqs
     """
     try:
-        for message in messages:
-            logger.info(
-                f"Deleting message with id {message[KEY_MESSAGE_ID]} from SQS queue "
-            )
-            sqs_client.delete_message(
-                QueueUrl=sqs_url, ReceiptHandle=message[KEY_RECEIPT_HANDLE]
-            )
+        logger.info(
+            f"Deleting message with id {message[KEY_MESSAGE_ID]} from SQS queue "
+        )
+        sqs_client.delete_message(
+            QueueUrl=sqs_url, ReceiptHandle=message[KEY_RECEIPT_HANDLE]
+        )
     except Exception as ex:
         logger.error(
             f"Failed to delete message with id {message[KEY_MESSAGE_ID]} from SQS queue: {str(ex)}"
         )
 
 
-def get_to_be_processed_s3_prefixes(messages):
+def get_to_be_processed_s3_prefixes(message):
     """Processes response received from listening to sqs.
 
     Arguments:
-        messages: Response received from sqs
+        message: Response received from sqs
     """
     s3_prefixes = []
     s3_keys = []
     try:
-        for message in messages:
-            message_body = json.loads(message[BODY])
-            for event in message_body[KEY_RECORDS]:
-                s3_key = event[KEY_S3][KEY_OBJECT][KEY_KEY]
-                s3_keys.append(s3_key)
+        message_body = json.loads(message[BODY])
+        for event in message_body[KEY_RECORDS]:
+            s3_key = event[KEY_S3][KEY_OBJECT][KEY_KEY]
+            s3_keys.append(s3_key)
     except Exception as ex:
         logger.error(
             f"Key: {str(ex)} not found when retrieving the prefix from sqs message"
@@ -461,9 +466,10 @@ def parse_args():
     parser.add_argument("--dks_url", default="")
     parser.add_argument("--log_level", default="INFO")
     parser.add_argument("--region_name", default="eu-west-2")
-    parser.add_argument("--is_test", default="False")
+    parser.add_argument("--is_test", default=False)
     parser.add_argument("--environment", default="NOT_SET")
     parser.add_argument("--application", default="NOT_SET")
+    parser.add_argument("--max_retries", default=3)
 
     args = parser.parse_args()
     if "sqs_url" in os.environ:
@@ -471,6 +477,9 @@ def parse_args():
 
     if "dks_url" in os.environ:
         args.dks_url = os.environ["dks_url"]
+
+    if "max_retries" in os.environ:
+        args.max_retries = os.environ["max_retries"]
 
     if "ENVIRONMENT" in os.environ:
         args.environment = os.environ["ENVIRONMENT"]

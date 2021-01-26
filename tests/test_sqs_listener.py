@@ -52,17 +52,17 @@ DYNAMODB_TABLENAME = "data-egress"
 def test_get_to_be_processed_s3_prefixes():
     json_file = open("tests/sqs_message.json")
     message_body = json.load(json_file)
-    response = {MESSAGES: [{BODY: json.dumps(message_body)}]}
-    s3_prefixes = sqs_listener.get_to_be_processed_s3_prefixes(response[MESSAGES])
+    message = {BODY: json.dumps(message_body)}
+    s3_prefixes = sqs_listener.get_to_be_processed_s3_prefixes(message)
     assert SOURCE_PREFIX_VALUE == s3_prefixes[0]
 
 
 def test_get_to_be_processed_s3_prefixes_with_invalid_msg():
     json_file = open("tests/sqs_message_no_records.json")
     message_body = json.load(json_file)
-    response = {MESSAGES: [{BODY: json.dumps(message_body)}]}
+    message = {BODY: json.dumps(message_body)}
     with pytest.raises(KeyError) as ex:
-        sqs_listener.get_to_be_processed_s3_prefixes(response[MESSAGES])
+        sqs_listener.get_to_be_processed_s3_prefixes(message)
     assert (
         str(ex.value)
         == "\"Key: 's3' not found when retrieving the prefix from sqs message\""
@@ -72,16 +72,16 @@ def test_get_to_be_processed_s3_prefixes_with_invalid_msg():
 def test_get_to_be_processed_s3_prefixes_wrong_formatted_prefix_1():
     json_file = open("tests/sqs_message_wrong_formatted_prefix_1.json")
     message_body = json.load(json_file)
-    response = {MESSAGES: [{BODY: json.dumps(message_body)}]}
-    s3_prefixes = sqs_listener.get_to_be_processed_s3_prefixes(response[MESSAGES])
+    message = {BODY: json.dumps(message_body)}
+    s3_prefixes = sqs_listener.get_to_be_processed_s3_prefixes(message)
     assert len(s3_prefixes) == 0
 
 
 def test_get_to_be_processed_s3_prefixes_wrong_formatted_prefix_2():
     json_file = open("tests/sqs_message_wrong_formatted_prefix_2.json")
     message_body = json.load(json_file)
-    response = {MESSAGES: [{BODY: json.dumps(message_body)}]}
-    s3_prefixes = sqs_listener.get_to_be_processed_s3_prefixes(response[MESSAGES])
+    message = {BODY: json.dumps(message_body)}
+    s3_prefixes = sqs_listener.get_to_be_processed_s3_prefixes(message)
     assert len(s3_prefixes) == 0
 
 
@@ -218,6 +218,7 @@ def mock_args():
     args.is_test = True
     args.environment = "Test"
     args.application = "data-egress"
+    args.max_retries = 1
     return args
 
 
