@@ -27,6 +27,8 @@ TEST_DATA = "test_data"
 SERVICE_SQS = "sqs"
 BODY = "Body"
 MESSAGES = "Messages"
+ATTRIBUTES = "Attributes"
+NUMBER_OF_MESSAGES = "ApproximateNumberOfMessages"
 KEY_ROLE_ARN = "role_arn"
 KEY_COMPRESSION_FMT = "compression_fmt"
 KEY_COMPRESS = "compress"
@@ -50,17 +52,17 @@ DYNAMODB_TABLENAME = "data-egress"
 def test_get_to_be_processed_s3_prefixes():
     json_file = open("tests/sqs_message.json")
     message_body = json.load(json_file)
-    response = {MESSAGES: [{BODY: json.dumps(message_body)}]}
-    s3_prefixes = sqs_listener.get_to_be_processed_s3_prefixes(response[MESSAGES])
+    message = {BODY: json.dumps(message_body)}
+    s3_prefixes = sqs_listener.get_to_be_processed_s3_prefixes(message)
     assert SOURCE_PREFIX_VALUE == s3_prefixes[0]
 
 
 def test_get_to_be_processed_s3_prefixes_with_invalid_msg():
     json_file = open("tests/sqs_message_no_records.json")
     message_body = json.load(json_file)
-    response = {MESSAGES: [{BODY: json.dumps(message_body)}]}
+    message = {BODY: json.dumps(message_body)}
     with pytest.raises(KeyError) as ex:
-        sqs_listener.get_to_be_processed_s3_prefixes(response[MESSAGES])
+        sqs_listener.get_to_be_processed_s3_prefixes(message)
     assert (
         str(ex.value)
         == "\"Key: 's3' not found when retrieving the prefix from sqs message\""
@@ -70,16 +72,16 @@ def test_get_to_be_processed_s3_prefixes_with_invalid_msg():
 def test_get_to_be_processed_s3_prefixes_wrong_formatted_prefix_1():
     json_file = open("tests/sqs_message_wrong_formatted_prefix_1.json")
     message_body = json.load(json_file)
-    response = {MESSAGES: [{BODY: json.dumps(message_body)}]}
-    s3_prefixes = sqs_listener.get_to_be_processed_s3_prefixes(response[MESSAGES])
+    message = {BODY: json.dumps(message_body)}
+    s3_prefixes = sqs_listener.get_to_be_processed_s3_prefixes(message)
     assert len(s3_prefixes) == 0
 
 
 def test_get_to_be_processed_s3_prefixes_wrong_formatted_prefix_2():
     json_file = open("tests/sqs_message_wrong_formatted_prefix_2.json")
     message_body = json.load(json_file)
-    response = {MESSAGES: [{BODY: json.dumps(message_body)}]}
-    s3_prefixes = sqs_listener.get_to_be_processed_s3_prefixes(response[MESSAGES])
+    message = {BODY: json.dumps(message_body)}
+    s3_prefixes = sqs_listener.get_to_be_processed_s3_prefixes(message)
     assert len(s3_prefixes) == 0
 
 
@@ -106,6 +108,11 @@ def test_all(monkeypatch, aws_credentials):
         Bucket=DESTINATION_BUCKET_VALUE, Key=f"{DESTINATION_PREFIX_VALUE}some_file.gz"
     )[BODY].read()
     decompressed = decompress(compressed_data).decode()
+    response = sqs_client.get_queue_attributes(
+        QueueUrl=args.sqs_url, AttributeNames=[NUMBER_OF_MESSAGES]
+    )
+    available_msg_count = int(response[ATTRIBUTES][NUMBER_OF_MESSAGES])
+    assert available_msg_count == 0
     assert decompressed == TEST_DATA
 
 
@@ -207,8 +214,11 @@ def encrypt(initialisation_vector, datakey, unencrypted_bytes):
 
 def mock_args():
     args = argparse.Namespace()
-    args.log_level = logging.INFO
+    args.log_level = "INFO"
     args.is_test = True
+    args.environment = "Test"
+    args.application = "data-egress"
+    args.max_retries = 1
     return args
 
 

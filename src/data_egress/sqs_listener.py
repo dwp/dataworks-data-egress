@@ -3,6 +3,7 @@ import base64
 import json
 import logging
 import re
+import os
 import zlib
 import boto3
 import requests
@@ -11,6 +12,7 @@ from Crypto.Util import Counter
 from boto3.dynamodb.conditions import Key
 from data_egress import logger_utils
 
+ROLE_ARN = "role_arn"
 S3 = "s3"
 DYNAMODB = "dynamodb"
 LIST_OBJECTS_V2 = "list_objects_v2"
@@ -22,15 +24,17 @@ MESSAGES = "Messages"
 SQS = "sqs"
 ATTRIBUTES = "Attributes"
 NUMBER_OF_MESSAGES = "ApproximateNumberOfMessages"
+APPROXIMATE_RECEIVE_COUNT = "ApproximateReceiveCount"
 ALL = "All"
 BODY = "Body"
 DATA_ENCRYPTION_KEY_ID = "datakeyencryptionkeyid"
 CIPHER_TEXT = "ciphertext"
 IV = "iv"
 METADATA = "Metadata"
-sqs_count = 0
 PIPELINE_SUCCESS_FLAG = "pipeline_success.flag"
 KEY_RECORDS = "Records"
+KEY_MESSAGE_ID = "MessageId"
+KEY_RECEIPT_HANDLE = "ReceiptHandle"
 KEY_S3 = "s3"
 KEY_OBJECT = "object"
 KEY_KEY = "key"
@@ -66,9 +70,9 @@ class DynamoRecord:
         destination_bucket,
         destination_prefix,
         transfer_type,
-        compress,
-        compression_fmt,
-        role_arn,
+        compress=None,
+        compression_fmt=None,
+        role_arn=None,
     ):
         self.source_bucket = source_bucket
         self.source_prefix = source_prefix
@@ -87,7 +91,7 @@ def listen(args, s3_client):
     args: args like sqs_url , dks url will be passed in it
     s3_client: s3_client to connect to s3
     """
-    logger_utils.setup_logging(logger, args.log_level)
+    logger_utils.setup_logging(args)
     sqs_client = get_client(service_name=SQS, region_name=args.region_name)
     while True:
         try:
@@ -98,18 +102,31 @@ def listen(args, s3_client):
             logger.info(f"available messages count: {available_msg_count}")
             if available_msg_count and available_msg_count > 0:
                 response = sqs_client.receive_message(
-                    QueueUrl=args.sqs_url, AttributeNames=[ALL]
+                    QueueUrl=args.sqs_url, AttributeNames=[ALL], MaxNumberOfMessages=1
                 )
                 logger.debug(f"Response received from queue: {response}")
                 messages = response[MESSAGES]
-                s3_prefixes = get_to_be_processed_s3_prefixes(messages)
-                logger.info(f"s3 prefixes to be processed are : {s3_prefixes}")
-                dynamodb = get_dynamodb_resource(args.region_name)
-                s3prefix_and_dynamodb_records = query_dynamodb(s3_prefixes, dynamodb)
-                dynamo_records = process_dynamo_db_response(
-                    s3prefix_and_dynamodb_records
-                )
-                start_processing(s3_client, dynamo_records, args)
+                s3_prefixes = []
+                for message in messages:
+                    previous_deliveries_count = int(
+                        message[ATTRIBUTES][APPROXIMATE_RECEIVE_COUNT]
+                    )
+                    if previous_deliveries_count > args.max_retries:
+                        logger.warning(
+                            f"message: {message[KEY_MESSAGE_ID]} previously delivered: {previous_deliveries_count} more than max retries: {args.max_retries}"
+                        )
+                        # configure in future dlq to receive if message processing fails more than configured retries
+                    s3_prefixes = get_to_be_processed_s3_prefixes(message)
+                    logger.info(f"s3 prefixes to be processed are : {s3_prefixes}")
+                    dynamodb = get_dynamodb_resource(args.region_name)
+                    s3prefix_and_dynamodb_records = query_dynamodb(
+                        s3_prefixes, dynamodb
+                    )
+                    dynamo_records = process_dynamo_db_response(
+                        s3prefix_and_dynamodb_records
+                    )
+                    start_processing(s3_client, dynamo_records, args)
+                    delete_message_from_sqs(sqs_client, args.sqs_url, message)
                 if args.is_test:
                     break
         except Exception as ex:
@@ -120,20 +137,40 @@ def listen(args, s3_client):
                 break
 
 
-def get_to_be_processed_s3_prefixes(messages):
+def delete_message_from_sqs(sqs_client, sqs_url, message):
+    """Delete processed messages from sqs to prevent duplication.
+
+    Arguments:
+        sqs_client: SQS client object
+        sqs_url: SQS queue URL
+        message: Response received from sqs
+    """
+    try:
+        logger.info(
+            f"Deleting message with id {message[KEY_MESSAGE_ID]} from SQS queue "
+        )
+        sqs_client.delete_message(
+            QueueUrl=sqs_url, ReceiptHandle=message[KEY_RECEIPT_HANDLE]
+        )
+    except Exception as ex:
+        logger.error(
+            f"Failed to delete message with id {message[KEY_MESSAGE_ID]} from SQS queue: {str(ex)}"
+        )
+
+
+def get_to_be_processed_s3_prefixes(message):
     """Processes response received from listening to sqs.
 
     Arguments:
-        messages: Response received from sqs
+        message: Response received from sqs
     """
     s3_prefixes = []
     s3_keys = []
     try:
-        for message in messages:
-            message_body = json.loads(message[BODY])
-            for event in message_body[KEY_RECORDS]:
-                s3_key = event[KEY_S3][KEY_OBJECT][KEY_KEY]
-                s3_keys.append(s3_key)
+        message_body = json.loads(message[BODY])
+        for event in message_body[KEY_RECORDS]:
+            s3_key = event[KEY_S3][KEY_OBJECT][KEY_KEY]
+            s3_keys.append(s3_key)
     except Exception as ex:
         logger.error(
             f"Key: {str(ex)} not found when retrieving the prefix from sqs message"
@@ -181,35 +218,47 @@ def process_dynamo_db_response(s3prefix_and_dynamodb_records):
             logger.error(f"More than 1 record for the s3_prefix {s3_prefix}")
         else:
             try:
-                record = records[0]
-                dynamo_records = []
-                source_bucket = record[DYNAMO_DB_ITEM_SOURCE_BUCKET]
-                source_prefix = record[DYNAMO_DB_ITEM_SOURCE_PREFIX]
-                transfer_type = record[DYNAMO_DB_ITEM_TRANSFER_TYPE]
-                logger.info(f"{source_bucket} {source_prefix}")
-                if transfer_type == S3_TRANSFER_TYPE:
-                    destination_bucket = record[DYNAMO_DB_ITEM_DESTINATION_BUCKET]
-                    destination_prefix = record[DYNAMO_DB_ITEM_DESTINATION_PREFIX]
-                    compress = record[DYNAMO_DB_ITEM_COMPRESS]
-                    compression_fmt = record[DYNAMO_DB_ITEM_COMPRESSION_FMT]
-                    role_arn = record["role_arn"]
-                    dynamo_records.append(
-                        DynamoRecord(
-                            source_bucket,
-                            source_prefix,
-                            destination_bucket,
-                            destination_prefix,
-                            transfer_type,
-                            compress,
-                            compression_fmt,
-                            role_arn,
-                        )
-                    )
-                    return dynamo_records
+                return get_dynamo_records(records)
             except Exception as ex:
                 logger.error(
                     f"Key: {str(ex)} not found when retrieving from dynamodb response"
                 )
+
+
+def get_dynamo_records(records):
+    record = records[0]
+    dynamo_records = []
+    compress = None
+    compression_fmt = None
+    role_arn = None
+    destination_bucket = None
+    destination_prefix = None
+    source_bucket = record[DYNAMO_DB_ITEM_SOURCE_BUCKET]
+    source_prefix = record[DYNAMO_DB_ITEM_SOURCE_PREFIX]
+    transfer_type = record[DYNAMO_DB_ITEM_TRANSFER_TYPE]
+    logger.info(f"{source_bucket} {source_prefix}")
+    if transfer_type == S3_TRANSFER_TYPE:
+        destination_bucket = record[DYNAMO_DB_ITEM_DESTINATION_BUCKET]
+        destination_prefix = record[DYNAMO_DB_ITEM_DESTINATION_PREFIX]
+    if DYNAMO_DB_ITEM_COMPRESS in record:
+        compress = record[DYNAMO_DB_ITEM_COMPRESS]
+        if compress:
+            compression_fmt = record[DYNAMO_DB_ITEM_COMPRESSION_FMT]
+    if ROLE_ARN in record:
+        role_arn = record[ROLE_ARN]
+    dynamo_records.append(
+        DynamoRecord(
+            source_bucket,
+            source_prefix,
+            destination_bucket,
+            destination_prefix,
+            transfer_type,
+            compress,
+            compression_fmt,
+            role_arn,
+        )
+    )
+    return dynamo_records
 
 
 def start_processing(s3_client, dynamo_records, args):
@@ -224,27 +273,31 @@ def start_processing(s3_client, dynamo_records, args):
         source_bucket = dynamo_record.source_bucket
         source_prefix = dynamo_record.source_prefix
         keys = get_all_s3_keys(s3_client, source_bucket, source_prefix)
+        logger.info(f"Processing keys: {keys} for the prefix: {source_prefix}")
         for key in keys:
             s3_object = s3_client.get_object(Bucket=source_bucket, Key=key)
-            iv = s3_object[METADATA][IV]
-            ciphertext = s3_object[METADATA][CIPHER_TEXT]
-            datakeyencryptionkeyid = s3_object[METADATA][DATA_ENCRYPTION_KEY_ID]
+            metadata = s3_object[METADATA]
+            logger.info(f"Metadata for the s3 key : {metadata}")
+            iv = metadata[IV]
+            ciphertext = metadata[CIPHER_TEXT]
+            datakeyencryptionkeyid = metadata[DATA_ENCRYPTION_KEY_ID]
             plain_text_key = get_plaintext_key_calling_dks(
                 ciphertext, datakeyencryptionkeyid, args
             )
             streaming_data = s3_client.get_object(Bucket=source_bucket, Key=key)[BODY]
             data = decrypt(plain_text_key, iv, streaming_data)
-            if dynamo_record.compress:
+            if dynamo_record.compress is not None and dynamo_record.compress:
                 data = compress(data)
             file_name = key.replace(source_prefix, "")
             file_name_without_enc = file_name.replace(ENC_EXTENSION, "")
             destination_bucket = dynamo_record.destination_bucket
             destination_prefix = dynamo_record.destination_prefix
             role_arn = dynamo_record.role_arn
-            sts_response = assume_role(role_arn, "session_name", 3600)
-            s3_client_with_assumed_role = get_s3_client_with_assumed_role(sts_response)
+            if role_arn is not None:
+                sts_response = assume_role(role_arn, "session_name", 3600)
+                s3_client = get_s3_client_with_assumed_role(sts_response)
             save(
-                s3_client_with_assumed_role,
+                s3_client,
                 file_name_without_enc,
                 destination_bucket,
                 destination_prefix,
@@ -263,9 +316,14 @@ def get_all_s3_keys(s3_client, source_bucket, source_prefix):
     keys = []
     paginator = s3_client.get_paginator(LIST_OBJECTS_V2)
     pages = paginator.paginate(Bucket=source_bucket, Prefix=source_prefix)
+    logger.info(
+        f"Getting all keys in bucket: {source_bucket} for prefix: {source_prefix}"
+    )
     for page in pages:
         for obj in page[CONTENTS]:
-            keys.append(obj[KEY])
+            key = obj[KEY]
+            if (PIPELINE_SUCCESS_FLAG not in key) and (source_prefix != key):
+                keys.append(key)
     return keys
 
 
@@ -293,18 +351,19 @@ def call_dks(cek, kek, args):
     kek: key encryption key of the envelope encryption taken from metadata
     args: args passed from client
     """
+    logger.info("Calling DKS to retrieve plaintext key")
     try:
-        url = args.dks_url
+        url = f"{args.dks_url}/datakey/actions/decrypt"
         params = {"keyId": kek}
         result = requests.post(
             url,
             params=params,
             data=cek,
             cert=(
-                "/etc/pki/tls/certs/private_key.crt",
-                "/etc/pki/tls/private/private_key.key",
+                "/etc/ssl/certs/data_egress.crt",
+                "/etc/ssl/private/data_egress.key",
             ),
-            verify="/etc/pki/ca-trust/source/anchors/analytical_ca.pem",
+            verify="/usr/local/share/ca-certificates/data_egress_ca.pem",
         )
         content = result.json()
     except BaseException as ex:
@@ -321,6 +380,7 @@ def decrypt(plain_text_key, iv_key, data):
     iv_key: initialisation vector
     data: unencrypted data
     """
+    logger.info("Decrypting data")
     try:
         iv_int = int(base64.b64decode(iv_key).hex(), 16)
         ctr = Counter.new(AES.block_size * 8, initial_value=iv_int)
@@ -337,7 +397,7 @@ def compress(decrypted):
     Arguments:
     decrypted: Decrypted bytes
     """
-    logger.info(f"decrypted: {decrypted}")
+    logger.info("Compressing decrypted data")
     compress = zlib.compressobj(9, zlib.DEFLATED, 16 + zlib.MAX_WBITS)
     compressed_data = compress.compress(decrypted)
     compressed_data += compress.flush()
@@ -356,6 +416,7 @@ def save(s3_client, file_name, destination_bucket, destination_prefix, data):
     """
     try:
         key = f"{destination_prefix}{file_name}.gz"
+        logger.info(f"saving to bucket:{destination_bucket} with key: {key}")
         response = s3_client.put_object(
             Body=data,
             Bucket=destination_bucket,
@@ -420,8 +481,20 @@ def parse_args():
     parser.add_argument("--dks_url", default="")
     parser.add_argument("--log_level", default="INFO")
     parser.add_argument("--region_name", default="eu-west-2")
+    parser.add_argument("--is_test", default=False)
+    parser.add_argument("--max_retries", default=3)
 
-    return parser.parse_args()
+    args = parser.parse_args()
+    if "sqs_url" in os.environ:
+        args.sqs_url = os.environ["sqs_url"]
+
+    if "dks_url" in os.environ:
+        args.dks_url = os.environ["dks_url"]
+
+    if "max_retries" in os.environ:
+        args.max_retries = os.environ["max_retries"]
+
+    return args
 
 
 def assume_role(aws_role_arn, session_name, session_timeout):
