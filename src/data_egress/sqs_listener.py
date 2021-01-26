@@ -13,7 +13,6 @@ from boto3.dynamodb.conditions import Key
 from data_egress import logger_utils
 
 ROLE_ARN = "role_arn"
-
 S3 = "s3"
 DYNAMODB = "dynamodb"
 LIST_OBJECTS_V2 = "list_objects_v2"
@@ -32,7 +31,6 @@ DATA_ENCRYPTION_KEY_ID = "datakeyencryptionkeyid"
 CIPHER_TEXT = "ciphertext"
 IV = "iv"
 METADATA = "Metadata"
-sqs_count = 0
 PIPELINE_SUCCESS_FLAG = "pipeline_success.flag"
 KEY_RECORDS = "Records"
 KEY_MESSAGE_ID = "MessageId"
@@ -114,7 +112,7 @@ def listen(args, s3_client):
                         message[ATTRIBUTES][APPROXIMATE_RECEIVE_COUNT]
                     )
                     if previous_deliveries_count > args.max_retries:
-                        logger.warn(
+                        logger.warning(
                             f"message: {message[KEY_MESSAGE_ID]} previously delivered: {previous_deliveries_count} more than max retries: {args.max_retries}"
                         )
                         # configure in future dlq to receive if message processing fails more than configured retries
@@ -220,41 +218,47 @@ def process_dynamo_db_response(s3prefix_and_dynamodb_records):
             logger.error(f"More than 1 record for the s3_prefix {s3_prefix}")
         else:
             try:
-                record = records[0]
-                dynamo_records = []
-                source_bucket = record[DYNAMO_DB_ITEM_SOURCE_BUCKET]
-                source_prefix = record[DYNAMO_DB_ITEM_SOURCE_PREFIX]
-                transfer_type = record[DYNAMO_DB_ITEM_TRANSFER_TYPE]
-                logger.info(f"{source_bucket} {source_prefix}")
-                if transfer_type == S3_TRANSFER_TYPE:
-                    destination_bucket = record[DYNAMO_DB_ITEM_DESTINATION_BUCKET]
-                    destination_prefix = record[DYNAMO_DB_ITEM_DESTINATION_PREFIX]
-                compress = None
-                compression_fmt = None
-                role_arn = None
-                if DYNAMO_DB_ITEM_COMPRESS in record:
-                    compress = record[DYNAMO_DB_ITEM_COMPRESS]
-                    if compress:
-                        compression_fmt = record[DYNAMO_DB_ITEM_COMPRESSION_FMT]
-                if ROLE_ARN in record:
-                    role_arn = record[ROLE_ARN]
-                dynamo_records.append(
-                    DynamoRecord(
-                        source_bucket,
-                        source_prefix,
-                        destination_bucket,
-                        destination_prefix,
-                        transfer_type,
-                        compress,
-                        compression_fmt,
-                        role_arn,
-                    )
-                )
-                return dynamo_records
+                return get_dynamo_records(records)
             except Exception as ex:
                 logger.error(
                     f"Key: {str(ex)} not found when retrieving from dynamodb response"
                 )
+
+
+def get_dynamo_records(records):
+    record = records[0]
+    dynamo_records = []
+    compress = None
+    compression_fmt = None
+    role_arn = None
+    destination_bucket = None
+    destination_prefix = None
+    source_bucket = record[DYNAMO_DB_ITEM_SOURCE_BUCKET]
+    source_prefix = record[DYNAMO_DB_ITEM_SOURCE_PREFIX]
+    transfer_type = record[DYNAMO_DB_ITEM_TRANSFER_TYPE]
+    logger.info(f"{source_bucket} {source_prefix}")
+    if transfer_type == S3_TRANSFER_TYPE:
+        destination_bucket = record[DYNAMO_DB_ITEM_DESTINATION_BUCKET]
+        destination_prefix = record[DYNAMO_DB_ITEM_DESTINATION_PREFIX]
+    if DYNAMO_DB_ITEM_COMPRESS in record:
+        compress = record[DYNAMO_DB_ITEM_COMPRESS]
+        if compress:
+            compression_fmt = record[DYNAMO_DB_ITEM_COMPRESSION_FMT]
+    if ROLE_ARN in record:
+        role_arn = record[ROLE_ARN]
+    dynamo_records.append(
+        DynamoRecord(
+            source_bucket,
+            source_prefix,
+            destination_bucket,
+            destination_prefix,
+            transfer_type,
+            compress,
+            compression_fmt,
+            role_arn,
+        )
+    )
+    return dynamo_records
 
 
 def start_processing(s3_client, dynamo_records, args):
@@ -312,6 +316,7 @@ def get_all_s3_keys(s3_client, source_bucket, source_prefix):
     keys = []
     paginator = s3_client.get_paginator(LIST_OBJECTS_V2)
     pages = paginator.paginate(Bucket=source_bucket, Prefix=source_prefix)
+    logger.info(f"Getting all keys in bucket: {source_bucket} for prefix: {source_prefix}")
     for page in pages:
         for obj in page[CONTENTS]:
             key = obj[KEY]
@@ -344,6 +349,7 @@ def call_dks(cek, kek, args):
     kek: key encryption key of the envelope encryption taken from metadata
     args: args passed from client
     """
+    logger.info("Calling DKS to retrieve plaintext key")
     try:
         url = f"{args.dks_url}/datakey/actions/decrypt"
         params = {"keyId": kek}
@@ -372,6 +378,7 @@ def decrypt(plain_text_key, iv_key, data):
     iv_key: initialisation vector
     data: unencrypted data
     """
+    logger.info("Decrypting data")
     try:
         iv_int = int(base64.b64decode(iv_key).hex(), 16)
         ctr = Counter.new(AES.block_size * 8, initial_value=iv_int)
@@ -388,7 +395,7 @@ def compress(decrypted):
     Arguments:
     decrypted: Decrypted bytes
     """
-    logger.info(f"decrypted: {decrypted}")
+    logger.info("Compressing decrypted data")
     compress = zlib.compressobj(9, zlib.DEFLATED, 16 + zlib.MAX_WBITS)
     compressed_data = compress.compress(decrypted)
     compressed_data += compress.flush()
