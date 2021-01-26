@@ -317,7 +317,9 @@ def get_all_s3_keys(s3_client, source_bucket, source_prefix):
     keys = []
     paginator = s3_client.get_paginator(LIST_OBJECTS_V2)
     pages = paginator.paginate(Bucket=source_bucket, Prefix=source_prefix)
-    logger.info(f"Getting all keys in bucket: {source_bucket} for prefix: {source_prefix}")
+    logger.info(
+        f"Getting all keys in bucket: {source_bucket} for prefix: {source_prefix}"
+    )
     for page in pages:
         for obj in page[CONTENTS]:
             key = obj[KEY]
