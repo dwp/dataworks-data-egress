@@ -473,8 +473,6 @@ def parse_args():
     parser.add_argument("--log_level", default="INFO")
     parser.add_argument("--region_name", default="eu-west-2")
     parser.add_argument("--is_test", default=False)
-    parser.add_argument("--environment", default="NOT_SET")
-    parser.add_argument("--application", default="NOT_SET")
     parser.add_argument("--max_retries", default=3)
 
     args = parser.parse_args()
@@ -486,11 +484,6 @@ def parse_args():
 
     if "max_retries" in os.environ:
         args.max_retries = os.environ["max_retries"]
-
-    if "ENVIRONMENT" in os.environ:
-        args.environment = os.environ["ENVIRONMENT"]
-    if "APPLICATION" in os.environ:
-        args.application = os.environ["APPLICATION"]
 
     return args
 
