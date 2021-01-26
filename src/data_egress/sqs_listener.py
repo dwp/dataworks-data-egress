@@ -136,8 +136,12 @@ def delete_message_from_sqs(sqs_client, sqs_url, messages):
     """
     try:
         for message in messages:
-            logger.info(f"Deleting message with id {message[KEY_MESSAGE_ID]} from SQS queue ")
-            sqs_client.delete_message(QueueUrl=sqs_url,ReceiptHandle=message[KEY_RECEIPT_HANDLE])
+            logger.info(
+                f"Deleting message with id {message[KEY_MESSAGE_ID]} from SQS queue "
+            )
+            sqs_client.delete_message(
+                QueueUrl=sqs_url, ReceiptHandle=message[KEY_RECEIPT_HANDLE]
+            )
     except Exception as ex:
         logger.error(
             f"Failed to delete message with id {message[KEY_MESSAGE_ID]} from SQS queue: {str(ex)}"
