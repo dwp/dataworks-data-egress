@@ -27,6 +27,8 @@ TEST_DATA = "test_data"
 SERVICE_SQS = "sqs"
 BODY = "Body"
 MESSAGES = "Messages"
+ATTRIBUTES = "Attributes"
+NUMBER_OF_MESSAGES = "ApproximateNumberOfMessages"
 KEY_ROLE_ARN = "role_arn"
 KEY_COMPRESSION_FMT = "compression_fmt"
 KEY_COMPRESS = "compress"
@@ -106,6 +108,11 @@ def test_all(monkeypatch, aws_credentials):
         Bucket=DESTINATION_BUCKET_VALUE, Key=f"{DESTINATION_PREFIX_VALUE}some_file.gz"
     )[BODY].read()
     decompressed = decompress(compressed_data).decode()
+    response = sqs_client.get_queue_attributes(
+        QueueUrl=args.sqs_url, AttributeNames=[NUMBER_OF_MESSAGES]
+    )
+    available_msg_count = int(response[ATTRIBUTES][NUMBER_OF_MESSAGES])
+    assert available_msg_count == 0
     assert decompressed == TEST_DATA
 
 

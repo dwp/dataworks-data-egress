@@ -34,6 +34,8 @@ METADATA = "Metadata"
 sqs_count = 0
 PIPELINE_SUCCESS_FLAG = "pipeline_success.flag"
 KEY_RECORDS = "Records"
+KEY_MESSAGE_ID = "MessageId"
+KEY_RECEIPT_HANDLE = "ReceiptHandle"
 KEY_S3 = "s3"
 KEY_OBJECT = "object"
 KEY_KEY = "key"
@@ -101,7 +103,7 @@ def listen(args, s3_client):
             logger.info(f"available messages count: {available_msg_count}")
             if available_msg_count and available_msg_count > 0:
                 response = sqs_client.receive_message(
-                    QueueUrl=args.sqs_url, AttributeNames=[ALL]
+                    QueueUrl=args.sqs_url, AttributeNames=[ALL], MaxNumberOfMessages=1
                 )
                 logger.debug(f"Response received from queue: {response}")
                 messages = response[MESSAGES]
@@ -113,6 +115,7 @@ def listen(args, s3_client):
                     s3prefix_and_dynamodb_records
                 )
                 start_processing(s3_client, dynamo_records, args)
+                delete_message_from_sqs(sqs_client, args.sqs_url, messages)
                 if args.is_test:
                     break
         except Exception as ex:
@@ -121,6 +124,24 @@ def listen(args, s3_client):
             )
             if args.is_test:
                 break
+
+
+def delete_message_from_sqs(sqs_client, sqs_url, messages):
+    """Delete processed messages from sqs to prevent duplication.
+
+    Arguments:
+        sqs_client: SQS client object
+        sqs_url: SQS queue URL
+        messages: Response received from sqs
+    """
+    try:
+        for message in messages:
+            logger.info(f"Deleting message with id {message[KEY_MESSAGE_ID]} from SQS queue ")
+            sqs_client.delete_message(QueueUrl=sqs_url,ReceiptHandle=message[KEY_RECEIPT_HANDLE])
+    except Exception as ex:
+        logger.error(
+            f"Failed to delete message with id {message[KEY_MESSAGE_ID]} from SQS queue: {str(ex)}"
+        )
 
 
 def get_to_be_processed_s3_prefixes(messages):
