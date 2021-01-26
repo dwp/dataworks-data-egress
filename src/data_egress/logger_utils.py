@@ -19,7 +19,6 @@ def setup_logging(args):
 
     json_format = (
         '{ "timestamp": "%(asctime)s", "log_level": "%(levelname)s", "message": "%(message)s", '
-        f'"environment": "{args.environment}", "application": "{args.application}", '
         f'"module": "%(module)s", "process": "%(process)s", '
         f'"thread": "[%(thread)s]", "hostname": "{hostname}" }} '
     )

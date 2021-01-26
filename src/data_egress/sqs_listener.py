@@ -12,6 +12,7 @@ from Crypto.Util import Counter
 from boto3.dynamodb.conditions import Key
 from data_egress import logger_utils
 
+BUCKET_OWNER_FULL_CONTROL_ACL = "bucket-owner-full-control"
 ROLE_ARN = "role_arn"
 S3 = "s3"
 DYNAMODB = "dynamodb"
@@ -417,7 +418,8 @@ def save(s3_client, file_name, destination_bucket, destination_prefix, data):
     try:
         key = f"{destination_prefix}{file_name}.gz"
         logger.info(f"saving to bucket:{destination_bucket} with key: {key}")
-        response = s3_client.put_object(
+        s3_client.put_object(
+            ACL=BUCKET_OWNER_FULL_CONTROL_ACL,
             Body=data,
             Bucket=destination_bucket,
             Key=key,
