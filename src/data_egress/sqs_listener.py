@@ -110,14 +110,20 @@ def listen(args, s3_client):
                 messages = response[MESSAGES]
                 s3_prefixes = []
                 for message in messages:
-                    previous_deliveries_count = int(message[ATTRIBUTES][APPROXIMATE_RECEIVE_COUNT])
+                    previous_deliveries_count = int(
+                        message[ATTRIBUTES][APPROXIMATE_RECEIVE_COUNT]
+                    )
                     if previous_deliveries_count > args.max_retries:
-                        logger.warn(f"message: {message[KEY_MESSAGE_ID]} previously delivered: {previous_deliveries_count} more than max retries: {args.max_retries}")
+                        logger.warn(
+                            f"message: {message[KEY_MESSAGE_ID]} previously delivered: {previous_deliveries_count} more than max retries: {args.max_retries}"
+                        )
                         # configure in future dlq to receive if message processing fails more than configured retries
                     s3_prefixes = get_to_be_processed_s3_prefixes(message)
                     logger.info(f"s3 prefixes to be processed are : {s3_prefixes}")
                     dynamodb = get_dynamodb_resource(args.region_name)
-                    s3prefix_and_dynamodb_records = query_dynamodb(s3_prefixes, dynamodb)
+                    s3prefix_and_dynamodb_records = query_dynamodb(
+                        s3_prefixes, dynamodb
+                    )
                     dynamo_records = process_dynamo_db_response(
                         s3prefix_and_dynamodb_records
                     )
