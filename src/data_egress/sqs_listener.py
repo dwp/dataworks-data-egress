@@ -302,7 +302,7 @@ def start_processing(s3_client, dynamo_records, args):
                 file_name_without_enc,
                 destination_bucket,
                 destination_prefix,
-                data
+                data,
             )
 
 
