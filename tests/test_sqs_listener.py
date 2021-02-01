@@ -105,7 +105,7 @@ def test_all(monkeypatch, aws_credentials):
     s3_client = mock_get_s3_client()
     sqs_listener.listen(args, s3_client)
     compressed_data = s3_client.get_object(
-        Bucket=DESTINATION_BUCKET_VALUE, Key=f"{DESTINATION_PREFIX_VALUE}some_file.gz"
+        Bucket=DESTINATION_BUCKET_VALUE, Key=f"{DESTINATION_PREFIX_VALUE}some_file"
     )[BODY].read()
     decompressed = decompress(compressed_data).decode()
     response = sqs_client.get_queue_attributes(

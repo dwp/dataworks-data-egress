@@ -416,7 +416,7 @@ def save(s3_client, file_name, destination_bucket, destination_prefix, data):
     data: Data to be uploaded
     """
     try:
-        key = f"{destination_prefix}{file_name}.gz"
+        key = f"{destination_prefix}{file_name}"
         logger.info(f"saving to bucket:{destination_bucket} with key: {key}")
         s3_client.put_object(
             ACL=BUCKET_OWNER_FULL_CONTROL_ACL,
