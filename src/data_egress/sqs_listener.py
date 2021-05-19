@@ -189,15 +189,29 @@ def get_to_be_processed_s3_prefixes(message):
 
 
 def query_dynamodb(s3_prefixes, dynamodb):
-    """Query  DynamoDb status table for a given correlation id.
+    """Scan DynamoDB table for generic source prefixes.
+
+    Query  DynamoDb status table for a given correlation id.
 
     Arguments:
         s3_prefixes (string): source bucket prefixes to query dynamo db table
     """
+    generic_source_prefixes = []
     table = dynamodb.Table(DATA_EGRESS_DYNAMO_DB_TABLE)
+    scan_response = table.scan(ProjectionExpression=HASH_KEY)
+    for item in scan_response[ITEMS]:
+        if item[HASH_KEY].endswith("*"):
+            logger.info(f"Generic source_prefix found: {item[HASH_KEY]}")
+            generic_source_prefixes.append(item[HASH_KEY].replace("*", ""))
     s3prefix_and_dynamodb_records = []
     for s3_prefix in s3_prefixes:
-        response = table.query(KeyConditionExpression=Key(HASH_KEY).eq(s3_prefix))
+        starts_with_prefix = list(filter(s3_prefix.startswith, generic_source_prefixes)) != []
+        if starts_with_prefix:
+            dynamodb_source_prefix = f"{list(filter(s3_prefix.startswith, generic_source_prefixes))[0]}*"
+            logger.info(f"{s3_prefix} in list of generics, dynamodb_source_prefix: {dynamodb_source_prefix}")
+            response = table.query(KeyConditionExpression=Key(HASH_KEY).eq(dynamodb_source_prefix))
+        else:
+            response = table.query(KeyConditionExpression=Key(HASH_KEY).eq(s3_prefix))
         items = response[ITEMS]
         logger.info(f"dynamodb items for {s3_prefix}: {items}")
         s3prefix_and_dynamodb_records.append(S3PrefixAndDynamoRecord(s3_prefix, items))
@@ -219,14 +233,14 @@ def process_dynamo_db_response(s3prefix_and_dynamodb_records):
             logger.error(f"More than 1 record for the s3_prefix {s3_prefix}")
         else:
             try:
-                return get_dynamo_records(records)
+                return get_dynamo_records(records, s3_prefix)
             except Exception as ex:
                 logger.error(
                     f"Key: {str(ex)} not found when retrieving from dynamodb response"
                 )
 
 
-def get_dynamo_records(records):
+def get_dynamo_records(records, s3_prefix):
     record = records[0]
     dynamo_records = []
     compress = None
@@ -241,6 +255,11 @@ def get_dynamo_records(records):
     if transfer_type == S3_TRANSFER_TYPE:
         destination_bucket = record[DYNAMO_DB_ITEM_DESTINATION_BUCKET]
         destination_prefix = record[DYNAMO_DB_ITEM_DESTINATION_PREFIX]
+        if source_prefix != s3_prefix:
+            root_prefix = source_prefix.replace("*", "")
+            destination_extension = s3_prefix.replace(f"{root_prefix}", "")
+            source_prefix = s3_prefix
+            destination_prefix = f'{destination_prefix}{destination_extension}'
     if DYNAMO_DB_ITEM_COMPRESS in record:
         compress = record[DYNAMO_DB_ITEM_COMPRESS]
         if compress:
@@ -270,6 +289,7 @@ def start_processing(s3_client, dynamo_records, args):
     dynamo_records: Records looked up in dynamodb table for s3 prefixes
     args: args passed from client
     """
+    logger.info(f"dynamo_records: {dynamo_records}")
     for dynamo_record in dynamo_records:
         source_bucket = dynamo_record.source_bucket
         source_prefix = dynamo_record.source_prefix
@@ -321,10 +341,13 @@ def get_all_s3_keys(s3_client, source_bucket, source_prefix):
         f"Getting all keys in bucket: {source_bucket} for prefix: {source_prefix}"
     )
     for page in pages:
-        for obj in page[CONTENTS]:
-            key = obj[KEY]
-            if (PIPELINE_SUCCESS_FLAG not in key) and (source_prefix != key):
-                keys.append(key)
+        for page_obj in page[CONTENTS]:
+            item = page_obj[KEY]
+            if PIPELINE_SUCCESS_FLAG in item:
+                for obj in page[CONTENTS]:
+                    key = obj[KEY]
+                    if (PIPELINE_SUCCESS_FLAG not in key) and (source_prefix != key):
+                        keys.append(key)
     return keys
 
 
@@ -419,10 +442,10 @@ def save(s3_client, file_name, destination_bucket, destination_prefix, data):
         key = f"{destination_prefix}{file_name}"
         logger.info(f"saving to bucket:{destination_bucket} with key: {key}")
         s3_client.put_object(
-            ACL=BUCKET_OWNER_FULL_CONTROL_ACL,
             Body=data,
             Bucket=destination_bucket,
             Key=key,
+            ServerSideEncryption="aws:kms"
         )
         logger.info(f"Saved key: {key} in destination bucket {destination_bucket}")
     except Exception as ex:
