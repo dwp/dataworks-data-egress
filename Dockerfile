@@ -1,8 +1,11 @@
 FROM python:3.8-alpine3.10
 
-WORKDIR /
-COPY ./ /app
-WORKDIR /app
+# Data volume
+VOLUME [ "/data-egress" ]
+
+COPY ./ /data-egress
+# Working from data dir
+WORKDIR /data-egress
 
 
 ENV acm_cert_helper_version="0.37.0"
@@ -14,7 +17,7 @@ RUN echo "===> Installing Dependencies ..." \
     && apk add --no-cache ca-certificates \
     && apk add --no-cache util-linux \
     && echo "===> Installing acm_pca_cert_generator ..." \
-    && apk add --no-cache g++ gcc musl-dev libffi-dev openssl-dev gcc build-essential python-dev\
+    && apk add --no-cache g++ gcc musl-dev libffi-dev openssl-dev gcc \
     && pip3 install https://github.com/dwp/acm-pca-cert-generator/releases/download/${acm_cert_helper_version}/acm_cert_helper-${acm_cert_helper_version}.tar.gz \
     && echo "==Dependencies done=="
 RUN python setup.py install
@@ -27,18 +30,12 @@ RUN addgroup $GROUP_NAME
 RUN adduser --system --ingroup $GROUP_NAME $USER_NAME
 RUN chown -R $USER_NAME.$GROUP_NAME /etc/ssl/
 RUN chown -R $USER_NAME.$GROUP_NAME /usr/local/share/ca-certificates/
-RUN chown -R $USER_NAME.$GROUP_NAME /app
+RUN chown -R $USER_NAME.$GROUP_NAME /data-egress
 RUN chown -R $USER_NAME.$GROUP_NAME /var
 RUN chmod a+rw /var/log
 RUN chmod -R a+rwx /etc/ssl/
 RUN chmod -R a+rwx /usr/local/share/ca-certificates/
 USER $USER_NAME
-
-# Data volume
-VOLUME [ "/data-egress" ]
-
-# Working from data dir
-WORKDIR /data-egress
 
 ENTRYPOINT ["./entrypoint.sh"]
 CMD ["python", "/usr/local/bin/sqs-listener"]
