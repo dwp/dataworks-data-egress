@@ -34,6 +34,11 @@ RUN chmod -R a+rwx /etc/ssl/
 RUN chmod -R a+rwx /usr/local/share/ca-certificates/
 USER $USER_NAME
 
+# Data volume
+VOLUME [ "/data-egress" ]
+
+# Working from data dir
+WORKDIR /data-egress
 
 ENTRYPOINT ["./entrypoint.sh"]
 CMD ["python", "/usr/local/bin/sqs-listener"]
