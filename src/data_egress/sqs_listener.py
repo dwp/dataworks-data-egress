@@ -205,11 +205,19 @@ def query_dynamodb(s3_prefixes, dynamodb):
             generic_source_prefixes.append(item[HASH_KEY].replace("*", ""))
     s3prefix_and_dynamodb_records = []
     for s3_prefix in s3_prefixes:
-        starts_with_prefix = list(filter(s3_prefix.startswith, generic_source_prefixes)) != []
+        starts_with_prefix = (
+            list(filter(s3_prefix.startswith, generic_source_prefixes)) != []
+        )
         if starts_with_prefix:
-            dynamodb_source_prefix = f"{list(filter(s3_prefix.startswith, generic_source_prefixes))[0]}*"
-            logger.info(f"{s3_prefix} in list of generics, dynamodb_source_prefix: {dynamodb_source_prefix}")
-            response = table.query(KeyConditionExpression=Key(HASH_KEY).eq(dynamodb_source_prefix))
+            dynamodb_source_prefix = (
+                f"{list(filter(s3_prefix.startswith, generic_source_prefixes))[0]}*"
+            )
+            logger.info(
+                f"{s3_prefix} in list of generics, dynamodb_source_prefix: {dynamodb_source_prefix}"
+            )
+            response = table.query(
+                KeyConditionExpression=Key(HASH_KEY).eq(dynamodb_source_prefix)
+            )
         else:
             response = table.query(KeyConditionExpression=Key(HASH_KEY).eq(s3_prefix))
         items = response[ITEMS]
@@ -259,7 +267,7 @@ def get_dynamo_records(records, s3_prefix):
             root_prefix = source_prefix.replace("*", "")
             destination_extension = s3_prefix.replace(f"{root_prefix}", "")
             source_prefix = s3_prefix
-            destination_prefix = f'{destination_prefix}{destination_extension}'
+            destination_prefix = f"{destination_prefix}{destination_extension}"
     if DYNAMO_DB_ITEM_COMPRESS in record:
         compress = record[DYNAMO_DB_ITEM_COMPRESS]
         if compress:
@@ -445,7 +453,7 @@ def save(s3_client, file_name, destination_bucket, destination_prefix, data):
             Body=data,
             Bucket=destination_bucket,
             Key=key,
-            ServerSideEncryption="aws:kms"
+            ServerSideEncryption="aws:kms",
         )
         logger.info(f"Saved key: {key} in destination bucket {destination_bucket}")
     except Exception as ex:
