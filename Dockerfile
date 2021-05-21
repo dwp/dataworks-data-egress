@@ -2,9 +2,6 @@ FROM python:3.8.10-alpine3.13
 
 RUN mkdir data-egress
 
-# Data volume
-VOLUME [ "/data-egress" ]
-
 WORKDIR /
 COPY ./ /app
 WORKDIR /app
@@ -24,8 +21,8 @@ RUN echo "===> Installing Dependencies ..." \
 RUN python setup.py install
 
 # Set user to run the process as in the docker contianer
-ENV USER_NAME=degr
-ENV GROUP_NAME=degr
+ENV USER_NAME=root
+ENV GROUP_NAME=root
 
 RUN addgroup $GROUP_NAME
 RUN adduser --system --ingroup $GROUP_NAME $USER_NAME
@@ -39,6 +36,9 @@ RUN chmod -R a+rwx /etc/ssl/
 RUN chmod -R a+rwx /usr/local/share/ca-certificates/
 RUN chmod -R a+rwx /data-egress
 USER $USER_NAME
+
+# Data volume
+VOLUME [ "/data-egress" ]
 
 ENTRYPOINT ["./entrypoint.sh"]
 CMD ["python", "/usr/local/bin/sqs-listener"]
