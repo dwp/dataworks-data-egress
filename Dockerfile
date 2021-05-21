@@ -8,7 +8,6 @@ WORKDIR /
 COPY ./ /app
 WORKDIR /app
 
-
 ENV acm_cert_helper_version="0.37.0"
 RUN echo "===> Installing Dependencies ..." \
     && echo "===> Updating base packages ..." \
@@ -18,7 +17,7 @@ RUN echo "===> Installing Dependencies ..." \
     && apk add --no-cache ca-certificates \
     && apk add --no-cache util-linux \
     && echo "===> Installing acm_pca_cert_generator ..." \
-    && apk add --no-cache g++ gcc musl-dev libffi-dev openssl-dev gcc \
+    && apk add --no-cache g++ gcc musl-dev libffi-dev openssl-dev gcc cargo \
     && pip3 install https://github.com/dwp/acm-pca-cert-generator/releases/download/${acm_cert_helper_version}/acm_cert_helper-${acm_cert_helper_version}.tar.gz \
     && echo "==Dependencies done=="
 RUN python setup.py install
