@@ -10,7 +10,7 @@ WORKDIR /app
 
 RUN python -m pip install --upgrade pip
 RUN apk -U upgrade
-RUN install --no-cache-dir cryptography>=3.2
+RUN pip install --no-cache-dir cryptography>=3.2
 ENV acm_cert_helper_version="0.37.0"
 RUN echo "===> Installing Dependencies ..." \
     && echo "===> Updating base packages ..." \
