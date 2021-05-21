@@ -8,6 +8,7 @@ WORKDIR /
 COPY ./ /app
 WORKDIR /app
 
+RUN python -m pip install --upgrade pip
 ENV acm_cert_helper_version="0.37.0"
 RUN echo "===> Installing Dependencies ..." \
     && echo "===> Updating base packages ..." \
