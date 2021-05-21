@@ -1,4 +1,4 @@
-FROM python:3.8-alpine3.10
+FROM python:3.8.10-alpine3.13
 
 RUN mkdir data-egress
 # Data volume
@@ -8,9 +8,6 @@ WORKDIR /
 COPY ./ /app
 WORKDIR /app
 
-RUN python -m pip install --upgrade pip
-RUN apk -U upgrade
-RUN pip install --no-cache-dir cryptography>=3.2
 ENV acm_cert_helper_version="0.37.0"
 RUN echo "===> Installing Dependencies ..." \
     && echo "===> Updating base packages ..." \
