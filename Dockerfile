@@ -24,8 +24,6 @@ RUN python setup.py install
 ENV USER_NAME=root
 ENV GROUP_NAME=root
 
-RUN addgroup $GROUP_NAME
-RUN adduser --system --ingroup $GROUP_NAME $USER_NAME
 RUN chown -R $USER_NAME.$GROUP_NAME /etc/ssl/
 RUN chown -R $USER_NAME.$GROUP_NAME /usr/local/share/ca-certificates/
 RUN chown -R $USER_NAME.$GROUP_NAME /app
