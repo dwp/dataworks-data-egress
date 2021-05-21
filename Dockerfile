@@ -1,6 +1,7 @@
 FROM python:3.8.10-alpine3.13
 
 RUN mkdir data-egress
+RUN chmod g+rwX /data-egress
 # Data volume
 VOLUME [ "/data-egress" ]
 
