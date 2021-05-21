@@ -1,7 +1,7 @@
 FROM python:3.8.10-alpine3.13
 
 RUN mkdir data-egress
-RUN chmod g+rwX /data-egress
+
 # Data volume
 VOLUME [ "/data-egress" ]
 
@@ -33,9 +33,11 @@ RUN chown -R $USER_NAME.$GROUP_NAME /etc/ssl/
 RUN chown -R $USER_NAME.$GROUP_NAME /usr/local/share/ca-certificates/
 RUN chown -R $USER_NAME.$GROUP_NAME /app
 RUN chown -R $USER_NAME.$GROUP_NAME /var
+RUN chown -R $USER_NAME.$GROUP_NAME /data-egress
 RUN chmod a+rw /var/log
 RUN chmod -R a+rwx /etc/ssl/
 RUN chmod -R a+rwx /usr/local/share/ca-certificates/
+RUN chmod -R a+rwx /data-egress
 USER $USER_NAME
 
 ENTRYPOINT ["./entrypoint.sh"]
