@@ -1,11 +1,12 @@
 FROM python:3.8-alpine3.10
 
+RUN mkdir data-egress
 # Data volume
 VOLUME [ "/data-egress" ]
 
-COPY ./ /data-egress
-# Working from data dir
-WORKDIR /data-egress
+WORKDIR /
+COPY ./ /app
+WORKDIR /app
 
 
 ENV acm_cert_helper_version="0.37.0"
@@ -30,7 +31,7 @@ RUN addgroup $GROUP_NAME
 RUN adduser --system --ingroup $GROUP_NAME $USER_NAME
 RUN chown -R $USER_NAME.$GROUP_NAME /etc/ssl/
 RUN chown -R $USER_NAME.$GROUP_NAME /usr/local/share/ca-certificates/
-RUN chown -R $USER_NAME.$GROUP_NAME /data-egress
+RUN chown -R $USER_NAME.$GROUP_NAME /app
 RUN chown -R $USER_NAME.$GROUP_NAME /var
 RUN chmod a+rw /var/log
 RUN chmod -R a+rwx /etc/ssl/
