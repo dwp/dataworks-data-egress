@@ -7,6 +7,7 @@ import boto3
 import argparse
 import logging
 import zlib
+import datetime
 
 from Crypto.Cipher import AES
 from Crypto.Util import Counter
@@ -41,6 +42,9 @@ DESTINATION_PREFIX_VALUE = "output/"
 KEY_SOURCE_PREFIX = "source_prefix"
 KEY_PIPELINE_NAME = "pipeline_name"
 SOURCE_PREFIX_VALUE = "data-egress-testing/2021-01-10/"
+ROOT_PREFIX = 'data-egress-testing/'
+SOURCE_PREFIX_TODAYS_DATE_VALUE = f'{ROOT_PREFIX}{datetime.datetime.today().strftime("%Y-%m-%d")}/'
+SOURCE_PREFIX_GENERIC_VALUE = 'data-egress-testing/dir1/dir2/'
 RECIPIENT_NAME_VALUE = "OpsMI"
 S3_TRANSFER_TYPE_VALUE = "S3"
 DESTINATION_BUCKET_VALUE = "4321"
@@ -102,10 +106,72 @@ def test_all(monkeypatch, aws_credentials):
         sqs_listener, "get_dynamodb_resource", mock_get_dynamodb_resource
     )
     monkeypatch.setattr(sqs_listener, "call_dks", mock_call_dks)
-    s3_client = mock_get_s3_client()
+    s3_client = mock_get_s3_client(SOURCE_PREFIX_VALUE)
     sqs_listener.listen(args, s3_client)
     compressed_data = s3_client.get_object(
         Bucket=DESTINATION_BUCKET_VALUE, Key=f"{DESTINATION_PREFIX_VALUE}some_file"
+    )[BODY].read()
+    decompressed = decompress(compressed_data).decode()
+    response = sqs_client.get_queue_attributes(
+        QueueUrl=args.sqs_url, AttributeNames=[NUMBER_OF_MESSAGES]
+    )
+    available_msg_count = int(response[ATTRIBUTES][NUMBER_OF_MESSAGES])
+    assert available_msg_count == 0
+    assert decompressed == TEST_DATA
+
+@mock_sqs
+@mock_dynamodb2
+@mock_s3
+@mock_sts
+def test_todays_date(monkeypatch, aws_credentials):
+    sqs_client = boto3.client(service_name=SERVICE_SQS, region_name=AWS_REGION)
+    json_file = open("tests/sqs_message.json")
+    response = json.load(json_file)
+    response['Records'][0]['s3']['object']['key'] = f"{SOURCE_PREFIX_TODAYS_DATE_VALUE}pipeline_success.flag"
+    msg_json_str = json.dumps(response)
+    args = mock_args()
+    args.sqs_url = mock_get_sqs_resource().url
+    args.region_name = AWS_REGION
+    sqs_client.send_message(QueueUrl=args.sqs_url, MessageBody=msg_json_str)
+    monkeypatch.setattr(
+        sqs_listener, "get_dynamodb_resource", mock_get_dynamodb_resource_date_prefix
+    )
+    monkeypatch.setattr(sqs_listener, "call_dks", mock_call_dks)
+    s3_client = mock_get_s3_client(SOURCE_PREFIX_TODAYS_DATE_VALUE)
+    sqs_listener.listen(args, s3_client)
+    compressed_data = s3_client.get_object(
+        Bucket=DESTINATION_BUCKET_VALUE, Key=f"{DESTINATION_PREFIX_VALUE}some_file"
+    )[BODY].read()
+    decompressed = decompress(compressed_data).decode()
+    response = sqs_client.get_queue_attributes(
+        QueueUrl=args.sqs_url, AttributeNames=[NUMBER_OF_MESSAGES]
+    )
+    available_msg_count = int(response[ATTRIBUTES][NUMBER_OF_MESSAGES])
+    assert available_msg_count == 0
+    assert decompressed == TEST_DATA
+
+
+@mock_sqs
+@mock_dynamodb2
+@mock_s3
+@mock_sts
+def test_todays_generic(monkeypatch, aws_credentials):
+    sqs_client = boto3.client(service_name=SERVICE_SQS, region_name=AWS_REGION)
+    json_file = open("tests/sqs_message_generic.json")
+    response = json.load(json_file)
+    msg_json_str = json.dumps(response)
+    args = mock_args()
+    args.sqs_url = mock_get_sqs_resource().url
+    args.region_name = AWS_REGION
+    sqs_client.send_message(QueueUrl=args.sqs_url, MessageBody=msg_json_str)
+    monkeypatch.setattr(
+        sqs_listener, "get_dynamodb_resource", mock_get_dynamodb_resource_generic_prefix
+    )
+    monkeypatch.setattr(sqs_listener, "call_dks", mock_call_dks)
+    s3_client = mock_get_s3_client(SOURCE_PREFIX_GENERIC_VALUE)
+    sqs_listener.listen(args, s3_client)
+    compressed_data = s3_client.get_object(
+        Bucket=DESTINATION_BUCKET_VALUE, Key=f"{DESTINATION_PREFIX_VALUE}{SOURCE_PREFIX_GENERIC_VALUE.replace(ROOT_PREFIX, '')}some_file"
     )[BODY].read()
     decompressed = decompress(compressed_data).decode()
     response = sqs_client.get_queue_attributes(
@@ -154,9 +220,71 @@ def mock_get_dynamodb_resource(region_name):
     )
     return dynamodb
 
+@mock_dynamodb2
+def mock_get_dynamodb_resource_date_prefix(region_name):
+    dynamodb = boto3.resource(service_name=SERVICE_DYNAMODB, region_name=AWS_REGION)
+    table = dynamodb.create_table(
+        TableName=DYNAMODB_TABLENAME,
+        KeySchema=[
+            {"AttributeName": KEY_SOURCE_PREFIX, "KeyType": "HASH"},  # Partition key
+            {"AttributeName": KEY_PIPELINE_NAME, "KeyType": "RANGE"},  # Sort key
+        ],
+        AttributeDefinitions=[
+            {"AttributeName": KEY_SOURCE_PREFIX, "AttributeType": "S"},
+            {"AttributeName": KEY_PIPELINE_NAME, "AttributeType": "S"},
+        ],
+        ProvisionedThroughput={"ReadCapacityUnits": 10, "WriteCapacityUnits": 10},
+    )
+    table.put_item(
+        Item={
+            KEY_SOURCE_PREFIX: f'{ROOT_PREFIX}$TODAYS_DATE/',
+            KEY_PIPELINE_NAME: RECIPIENT_NAME_VALUE,
+            KEY_SOURCE_BUCKET: SOURCE_BUCKET_VALUE,
+            KEY_DESTINATION_BUCKET: DESTINATION_BUCKET_VALUE,
+            KEY_DESTINATION_PREFIX: DESTINATION_PREFIX_VALUE,
+            KEY_TRANSFER_TYPE: S3_TRANSFER_TYPE_VALUE,
+            KEY_RECIPIENT_NAME: RECIPIENT_NAME_VALUE,
+            KEY_COMPRESS: True,
+            KEY_COMPRESSION_FMT: GZIP_VALUE,
+            KEY_ROLE_ARN: ROLE_ARN_VALUE,
+        }
+    )
+    return dynamodb
+
+@mock_dynamodb2
+def mock_get_dynamodb_resource_generic_prefix(region_name):
+    dynamodb = boto3.resource(service_name=SERVICE_DYNAMODB, region_name=AWS_REGION)
+    table = dynamodb.create_table(
+        TableName=DYNAMODB_TABLENAME,
+        KeySchema=[
+            {"AttributeName": KEY_SOURCE_PREFIX, "KeyType": "HASH"},  # Partition key
+            {"AttributeName": KEY_PIPELINE_NAME, "KeyType": "RANGE"},  # Sort key
+        ],
+        AttributeDefinitions=[
+            {"AttributeName": KEY_SOURCE_PREFIX, "AttributeType": "S"},
+            {"AttributeName": KEY_PIPELINE_NAME, "AttributeType": "S"},
+        ],
+        ProvisionedThroughput={"ReadCapacityUnits": 10, "WriteCapacityUnits": 10},
+    )
+    table.put_item(
+        Item={
+            KEY_SOURCE_PREFIX: f'{ROOT_PREFIX}*',
+            KEY_PIPELINE_NAME: RECIPIENT_NAME_VALUE,
+            KEY_SOURCE_BUCKET: SOURCE_BUCKET_VALUE,
+            KEY_DESTINATION_BUCKET: DESTINATION_BUCKET_VALUE,
+            KEY_DESTINATION_PREFIX: DESTINATION_PREFIX_VALUE,
+            KEY_TRANSFER_TYPE: S3_TRANSFER_TYPE_VALUE,
+            KEY_RECIPIENT_NAME: RECIPIENT_NAME_VALUE,
+            KEY_COMPRESS: True,
+            KEY_COMPRESSION_FMT: GZIP_VALUE,
+            KEY_ROLE_ARN: ROLE_ARN_VALUE,
+        }
+    )
+    return dynamodb
+
 
 @mock_s3
-def mock_get_s3_client():
+def mock_get_s3_client(source_prefix):
     s3_client = boto3.client(service_name=SERVICE_S3, region_name=AWS_REGION)
     s3_client.create_bucket(Bucket=SOURCE_BUCKET_VALUE)
     s3_client.create_bucket(Bucket=DESTINATION_BUCKET_VALUE)
@@ -188,12 +316,16 @@ def mock_get_s3_client():
     s3_client.put_object(
         Body=encrypted,
         Bucket=SOURCE_BUCKET_VALUE,
-        Key=f"{SOURCE_PREFIX_VALUE}some_file.enc",
+        Key=f"{source_prefix}some_file.enc",
         Metadata={
             "iv": IV_BASE64,
             "ciphertext": "test_ciphertext",
             "datakeyencryptionkeyid": "123",
         },
+    )
+    s3_client.put_object(
+        Bucket=SOURCE_BUCKET_VALUE,
+        Key=f"{source_prefix}pipeline_success.flag"
     )
     return s3_client
 
