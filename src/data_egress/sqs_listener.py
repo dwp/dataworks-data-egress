@@ -209,7 +209,7 @@ def query_dynamodb(s3_prefixes, dynamodb):
     start_key = None
     while not done:
         if start_key:
-            scan_kwargs['ExclusiveStartKey'] = start_key
+            scan_kwargs["ExclusiveStartKey"] = start_key
         response = table.scan(**scan_kwargs)
         for item in response[ITEMS]:
             if item[HASH_KEY].endswith("*"):
