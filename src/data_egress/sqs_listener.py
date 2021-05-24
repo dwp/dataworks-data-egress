@@ -7,6 +7,7 @@ import os
 import zlib
 import boto3
 import requests
+import datetime
 from Crypto.Cipher import AES
 from Crypto.Util import Counter
 from boto3.dynamodb.conditions import Key
@@ -51,6 +52,7 @@ DYNAMO_DB_ITEM_TRANSFER_TYPE = "transfer_type"
 S3_TRANSFER_TYPE = "S3"
 HASH_KEY = "source_prefix"
 RANGE_KEY = "pipeline_name"
+TODAYS_DATE = datetime.datetime.today().strftime('%Y-%m-%d')
 
 keys_map = {}
 
@@ -197,7 +199,9 @@ def query_dynamodb(s3_prefixes, dynamodb):
         s3_prefixes (string): source bucket prefixes to query dynamo db table
     """
     generic_source_prefixes = []
+    todays_date_prefixes = []
     table = dynamodb.Table(DATA_EGRESS_DYNAMO_DB_TABLE)
+    # Scan table for prefixes
     scan_kwargs = {
         'ProjectionExpression': HASH_KEY
     }
@@ -210,10 +214,13 @@ def query_dynamodb(s3_prefixes, dynamodb):
         for item in response[ITEMS]:
             if item[HASH_KEY].endswith("*"):
                 logger.info(f"Generic source_prefix found: {item[HASH_KEY]}")
-                generic_source_prefixes.append(item[HASH_KEY].replace("*", ""))
+                if "$TODAYS_DATE" in item[HASH_KEY]:
+                    todays_date_prefixes.append(item[HASH_KEY])
+                generic_source_prefixes.append(item[HASH_KEY].replace("*", "").replace("$TODAYS_DATE", TODAYS_DATE))
         start_key = response.get('LastEvaluatedKey', None)
         done = start_key is None
 
+    # Get results from dynamodb for source prefix
     s3prefix_and_dynamodb_records = []
     for s3_prefix in s3_prefixes:
         starts_with_prefix = (
@@ -226,11 +233,16 @@ def query_dynamodb(s3_prefixes, dynamodb):
             logger.info(
                 f"{s3_prefix} in list of generics, dynamodb_source_prefix: {dynamodb_source_prefix}"
             )
-            response = table.query(
-                KeyConditionExpression=Key(HASH_KEY).eq(dynamodb_source_prefix)
-            )
+            if dynamodb_source_prefix.replace(TODAYS_DATE, "$TODAYS_DATE") in todays_date_prefixes:
+                response = table.query(
+                    KeyConditionExpression=Key(HASH_KEY).eq(dynamodb_source_prefix.replace(TODAYS_DATE, "$TODAYS_DATE"))
+                )
+            else:
+                response = table.query(
+                    KeyConditionExpression=Key(HASH_KEY).eq(dynamodb_source_prefix)
+                )
         else:
-            response = table.query(KeyConditionExpression=Key(HASH_KEY).eq(s3_prefix))
+            response = table.query(KeyConditionExpression=Key(HASH_KEY).eq(s3_prefix.replace(TODAYS_DATE, "$TODAYS_DATE")))
         items = response[ITEMS]
         logger.info(f"dynamodb items for {s3_prefix}: {items}")
         s3prefix_and_dynamodb_records.append(S3PrefixAndDynamoRecord(s3_prefix, items))
@@ -275,10 +287,10 @@ def get_dynamo_records(records, s3_prefix):
         destination_bucket = record[DYNAMO_DB_ITEM_DESTINATION_BUCKET]
         destination_prefix = record[DYNAMO_DB_ITEM_DESTINATION_PREFIX]
         if source_prefix != s3_prefix:
-            root_prefix = source_prefix.replace("*", "")
+            root_prefix = source_prefix.replace("*", "").replace("$TODAYS_DATE", TODAYS_DATE)
             destination_extension = s3_prefix.replace(f"{root_prefix}", "")
             source_prefix = s3_prefix
-            destination_prefix = f"{destination_prefix}{destination_extension}"
+            destination_prefix = f'{destination_prefix.replace("$TODAYS_DATE", TODAYS_DATE)}{destination_extension}'
     if DYNAMO_DB_ITEM_COMPRESS in record:
         compress = record[DYNAMO_DB_ITEM_COMPRESS]
         if compress:
