@@ -198,20 +198,18 @@ def query_dynamodb(s3_prefixes, dynamodb):
     """
     generic_source_prefixes = []
     table = dynamodb.Table(DATA_EGRESS_DYNAMO_DB_TABLE)
-    scan_kwargs = {
-        'ProjectionExpression': HASH_KEY
-    }
+    scan_kwargs = {"ProjectionExpression": HASH_KEY}
     done = False
     start_key = None
     while not done:
         if start_key:
-            scan_kwargs['ExclusiveStartKey'] = start_key
+            scan_kwargs["ExclusiveStartKey"] = start_key
         response = table.scan(**scan_kwargs)
         for item in response[ITEMS]:
             if item[HASH_KEY].endswith("*"):
                 logger.info(f"Generic source_prefix found: {item[HASH_KEY]}")
                 generic_source_prefixes.append(item[HASH_KEY].replace("*", ""))
-        start_key = response.get('LastEvaluatedKey', None)
+        start_key = response.get("LastEvaluatedKey", None)
         done = start_key is None
 
     s3prefix_and_dynamodb_records = []
