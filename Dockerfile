@@ -6,6 +6,9 @@ WORKDIR /
 COPY ./ /app
 WORKDIR /app
 
+RUN pip install --upgrade pip
+ENV CRYPTOGRAPHY_DONT_BUILD_RUST=1
+
 ENV acm_cert_helper_version="0.37.0"
 RUN echo "===> Installing Dependencies ..." \
     && echo "===> Updating base packages ..." \
