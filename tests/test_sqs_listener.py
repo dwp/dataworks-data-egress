@@ -123,6 +123,7 @@ def test_all(monkeypatch, aws_credentials):
     assert available_msg_count == 0
     assert decompressed == TEST_DATA
 
+
 @mock_sqs
 @mock_dynamodb2
 @mock_s3
@@ -203,7 +204,9 @@ def test_todays_generic_for_encrypted_data(monkeypatch, aws_credentials):
     args.region_name = AWS_REGION
     sqs_client.send_message(QueueUrl=args.sqs_url, MessageBody=msg_json_str)
     monkeypatch.setattr(
-        sqs_listener, "get_dynamodb_resource", mock_get_dynamodb_resource_generic_prefix_decrypt_false
+        sqs_listener,
+        "get_dynamodb_resource",
+        mock_get_dynamodb_resource_generic_prefix_decrypt_false,
     )
     monkeypatch.setattr(sqs_listener, "call_dks", mock_call_dks)
     s3_client = mock_get_s3_client_prefix_decrypt_false(SOURCE_PREFIX_GENERIC_VALUE)
@@ -212,14 +215,13 @@ def test_todays_generic_for_encrypted_data(monkeypatch, aws_credentials):
         Bucket=DESTINATION_BUCKET_VALUE,
         Key=f"{DESTINATION_PREFIX_VALUE}{SOURCE_PREFIX_GENERIC_VALUE.replace(ROOT_PREFIX, '')}some_encrypted_file.enc",
     )[BODY].read()
-    
+
     response = sqs_client.get_queue_attributes(
         QueueUrl=args.sqs_url, AttributeNames=[NUMBER_OF_MESSAGES]
     )
     available_msg_count = int(response[ATTRIBUTES][NUMBER_OF_MESSAGES])
     assert available_msg_count == 0
     assert encrypted_data == encrypt_data(TEST_DATA)
-
 
 
 @mock_sqs
@@ -260,6 +262,7 @@ def mock_get_dynamodb_resource(region_name):
         }
     )
     return dynamodb
+
 
 @mock_dynamodb2
 def mock_get_dynamodb_resource_date_prefix(region_name):
@@ -404,7 +407,6 @@ def mock_get_s3_client_prefix_decrypt_false(source_prefix):
         Bucket=SOURCE_BUCKET_VALUE, Key=f"{source_prefix}pipeline_success.flag"
     )
     return s3_client
-
 
 
 @mock_s3
