@@ -8,8 +8,6 @@ jobs:
         params:
           path: dataworks-data-egress-pr
           status: pending
-        input_mapping:
-          dataworks-data-egress: dataworks-data-egress-pr
       - .: (( inject meta.plan.terraform-bootstrap ))
         input_mapping:
           dataworks-data-egress: dataworks-data-egress-pr
