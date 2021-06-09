@@ -294,7 +294,7 @@ def get_dynamo_records(records, s3_prefix):
     source_bucket = record[DYNAMO_DB_ITEM_SOURCE_BUCKET]
     source_prefix = record[DYNAMO_DB_ITEM_SOURCE_PREFIX]
     transfer_type = record[DYNAMO_DB_ITEM_TRANSFER_TYPE]
-    decrypt = record[DYNAMO_DB_ITEM_DECRYPT]
+
 
     logger.info(f"{source_bucket} {source_prefix}")
     if transfer_type == S3_TRANSFER_TYPE:
@@ -313,6 +313,12 @@ def get_dynamo_records(records, s3_prefix):
             compression_fmt = record[DYNAMO_DB_ITEM_COMPRESSION_FMT]
     if ROLE_ARN in record:
         role_arn = record[ROLE_ARN]
+
+    if DYNAMO_DB_ITEM_DECRYPT in record:
+        decrypt = record[DYNAMO_DB_ITEM_DECRYPT]
+    else:
+        decrypt = None
+
     dynamo_records.append(
         DynamoRecord(
             source_bucket,
@@ -367,11 +373,11 @@ def start_processing(s3_client, dynamo_records, args):
                 )
                 """ Decrypt data object """
                 data = decrypt_data(plain_text_key, iv, streaming_data)
+                if dynamo_record.compress is not None and dynamo_record.compress:
+                    data = compress(data)
             else:
-                data = streaming_data
+                data = streaming_data.read()
 
-            if dynamo_record.compress is not None and dynamo_record.compress:
-                data = compress(data)
             file_name = key.replace(source_prefix, "")
             file_name_without_enc = file_name.replace(ENC_EXTENSION, "")
 
@@ -546,9 +552,7 @@ def save_encrypted_data_on_s3(s3_client, file_name, destination_bucket, destinat
         s3_client.put_object(
             Body=data,
             Bucket=destination_bucket,
-            Key=key,
-            ServerSideEncryption="aws:kms",
-            ExtraArgs={"Metadata": {"f{IV}" : "f{iv}", "f{CIPHER_TEXT}" : "f{ciphertext}", "f{DATA_ENCRYPTION_KEY_ID}" : "f{datakeyencryptionkeyid}"} }
+            Key=key
         )
         logger.info(f"Saved key: {key} in destination bucket {destination_bucket}")
     except Exception as ex:
