@@ -49,6 +49,7 @@ DYNAMO_DB_ITEM_COMPRESSION_FMT = "compression_fmt"
 DYNAMO_DB_ITEM_SOURCE_PREFIX = "source_prefix"
 DYNAMO_DB_ITEM_DESTINATION_PREFIX = "destination_prefix"
 DYNAMO_DB_ITEM_TRANSFER_TYPE = "transfer_type"
+DYNAMO_DB_ITEM_DECRYPT = "decrypt"
 S3_TRANSFER_TYPE = "S3"
 HASH_KEY = "source_prefix"
 RANGE_KEY = "pipeline_name"
@@ -76,6 +77,7 @@ class DynamoRecord:
         compress=None,
         compression_fmt=None,
         role_arn=None,
+        decrypt=False,
     ):
         self.source_bucket = source_bucket
         self.source_prefix = source_prefix
@@ -85,6 +87,7 @@ class DynamoRecord:
         self.compress = compress
         self.compression_fmt = compression_fmt
         self.role_arn = role_arn
+        self.decrypt = decrypt
 
 
 def listen(args, s3_client):
@@ -291,6 +294,7 @@ def get_dynamo_records(records, s3_prefix):
     source_bucket = record[DYNAMO_DB_ITEM_SOURCE_BUCKET]
     source_prefix = record[DYNAMO_DB_ITEM_SOURCE_PREFIX]
     transfer_type = record[DYNAMO_DB_ITEM_TRANSFER_TYPE]
+
     logger.info(f"{source_bucket} {source_prefix}")
     if transfer_type == S3_TRANSFER_TYPE:
         destination_bucket = record[DYNAMO_DB_ITEM_DESTINATION_BUCKET]
@@ -308,6 +312,12 @@ def get_dynamo_records(records, s3_prefix):
             compression_fmt = record[DYNAMO_DB_ITEM_COMPRESSION_FMT]
     if ROLE_ARN in record:
         role_arn = record[ROLE_ARN]
+
+    if DYNAMO_DB_ITEM_DECRYPT in record:
+        decrypt = record[DYNAMO_DB_ITEM_DECRYPT]
+    else:
+        decrypt = None
+
     dynamo_records.append(
         DynamoRecord(
             source_bucket,
@@ -318,6 +328,7 @@ def get_dynamo_records(records, s3_prefix):
             compress,
             compression_fmt,
             role_arn,
+            decrypt,
         )
     )
     return dynamo_records
@@ -335,8 +346,14 @@ def start_processing(s3_client, dynamo_records, args):
     for dynamo_record in dynamo_records:
         source_bucket = dynamo_record.source_bucket
         source_prefix = dynamo_record.source_prefix
+        destination_bucket = dynamo_record.destination_bucket
+        destination_prefix = dynamo_record.destination_prefix
+        role_arn = dynamo_record.role_arn
+        decrypt = dynamo_record.decrypt
+
         keys = get_all_s3_keys(s3_client, source_bucket, source_prefix)
         logger.info(f"Processing keys: {keys} for the prefix: {source_prefix}")
+
         for key in keys:
             s3_object = s3_client.get_object(Bucket=source_bucket, Key=key)
             metadata = s3_object[METADATA]
@@ -344,28 +361,47 @@ def start_processing(s3_client, dynamo_records, args):
             iv = metadata[IV]
             ciphertext = metadata[CIPHER_TEXT]
             datakeyencryptionkeyid = metadata[DATA_ENCRYPTION_KEY_ID]
-            plain_text_key = get_plaintext_key_calling_dks(
-                ciphertext, datakeyencryptionkeyid, args
-            )
+
             streaming_data = s3_client.get_object(Bucket=source_bucket, Key=key)[BODY]
-            data = decrypt(plain_text_key, iv, streaming_data)
-            if dynamo_record.compress is not None and dynamo_record.compress:
-                data = compress(data)
+
+            if decrypt is not None and decrypt:
+                """Get plain data key from DKS"""
+                plain_text_key = get_plaintext_key_calling_dks(
+                    ciphertext, datakeyencryptionkeyid, args
+                )
+                """ Decrypt data object """
+                data = decrypt_data(plain_text_key, iv, streaming_data)
+                if dynamo_record.compress is not None and dynamo_record.compress:
+                    data = compress(data)
+            else:
+                data = streaming_data.read()
+
             file_name = key.replace(source_prefix, "")
             file_name_without_enc = file_name.replace(ENC_EXTENSION, "")
-            destination_bucket = dynamo_record.destination_bucket
-            destination_prefix = dynamo_record.destination_prefix
-            role_arn = dynamo_record.role_arn
+
             if role_arn is not None:
                 sts_response = assume_role(role_arn, "session_name", 3600)
                 s3_client = get_s3_client_with_assumed_role(sts_response)
-            save(
-                s3_client,
-                file_name_without_enc,
-                destination_bucket,
-                destination_prefix,
-                data,
-            )
+
+            if decrypt is not None and decrypt:
+                save_decrypted_data_on_s3(
+                    s3_client,
+                    file_name_without_enc,
+                    destination_bucket,
+                    destination_prefix,
+                    data,
+                )
+            else:
+                save_encrypted_data_on_s3(
+                    s3_client,
+                    file_name,
+                    destination_bucket,
+                    destination_prefix,
+                    data,
+                    iv,
+                    ciphertext,
+                    datakeyencryptionkeyid,
+                )
 
 
 def get_all_s3_keys(s3_client, source_bucket, source_prefix):
@@ -438,7 +474,7 @@ def call_dks(cek, kek, args):
     return content["plaintextDataKey"]
 
 
-def decrypt(plain_text_key, iv_key, data):
+def decrypt_data(plain_text_key, iv_key, data):
     """Gets plain text key to decrypt from dks
 
     Arguments:
@@ -470,7 +506,9 @@ def compress(decrypted):
     return compressed_data
 
 
-def save(s3_client, file_name, destination_bucket, destination_prefix, data):
+def save_decrypted_data_on_s3(
+    s3_client, file_name, destination_bucket, destination_prefix, data
+):
     """Compresses the data
 
     Arguments:
@@ -489,6 +527,38 @@ def save(s3_client, file_name, destination_bucket, destination_prefix, data):
             Key=key,
             ServerSideEncryption="aws:kms",
         )
+        logger.info(f"Saved key: {key} in destination bucket {destination_bucket}")
+    except Exception as ex:
+        logger.error(f"Exception while saving {str(ex)}")
+
+
+def save_encrypted_data_on_s3(
+    s3_client,
+    file_name,
+    destination_bucket,
+    destination_prefix,
+    data,
+    iv,
+    ciphertext,
+    datakeyencryptionkeyid,
+):
+    """Compresses the data
+
+    Arguments:
+    s3_client: client to connect to s3
+    file_name: Name of the file in the destination bucket
+    destination_bucket: destination bucket
+    destination_prefix: destination prefix
+    data: Data to be uploaded
+    iv:
+    ciphertext: encrypted data key
+    datakeyencryptionkeyid: id of encryption key used
+    """
+
+    try:
+        key = f"{destination_prefix}{file_name}"
+        logger.info(f"saving to bucket:{destination_bucket} with key: {key}")
+        s3_client.put_object(Body=data, Bucket=destination_bucket, Key=key)
         logger.info(f"Saved key: {key} in destination bucket {destination_bucket}")
     except Exception as ex:
         logger.error(f"Exception while saving {str(ex)}")
