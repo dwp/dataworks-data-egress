@@ -58,7 +58,6 @@ class DataKeyServiceImplTest: StringSpec() {
         "testBatchDataKey_ServerError_ThrowsException" {
             val httpClient = mock<CloseableHttpClient>()
             val statusLine = mock<StatusLine>()
-            //val entity = mock(HttpEntity::class.java)
             given(statusLine.statusCode).willReturn(503)
             val httpResponse = mock<CloseableHttpResponse>()
             given(httpResponse.statusLine).willReturn(statusLine)
