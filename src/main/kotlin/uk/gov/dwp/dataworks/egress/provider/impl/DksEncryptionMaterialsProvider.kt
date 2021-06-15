@@ -37,7 +37,9 @@ class DksEncryptionMaterialsProvider(private val dataKeyService: DataKeyService)
             .addDescription(METADATA_ENCRYPTED_KEY, cipherKey)
     }
 
-    override fun refresh() {}
+    override fun refresh() {
+        // not required.
+    }
 
     private fun getMaterialForDecryption(keyId: String, encryptedKey: String): EncryptionMaterials {
         val decryptedKey = dataKeyService.decryptKey(keyId, encryptedKey)

@@ -5,6 +5,7 @@ import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.future.asDeferred
 import kotlinx.coroutines.future.await
@@ -26,25 +27,28 @@ class QueueServiceImpl(private val sqs: SqsAsyncClient,
         flow {
             while (true) {
                 if (messageCount() > 0) {
-                    val response = sqs.receiveMessage(receiveMessageRequest()).await()
-                    if (response.hasMessages() && response.messages().size > 0) {
-                        val message = response.messages().first()
-                        val receiptHandle = message.receiptHandle()
-                        logger.info("Message received", "body" to message.body())
-                        val body = gson.jsonObject(message.body())
-                        if (body.has("Records")) {
-                            emit(Pair(receiptHandle, messagePrefixes(body)))
-                        }
-                    } else {
-                        logger.info("No message received")
-                        delay(sqsCheckIntervalMs)
-                    }
+                    processResponse(sqs.receiveMessage(receiveMessageRequest()).await())
                 } else {
                     logger.info("No messages on the queue")
                     delay(sqsCheckIntervalMs)
                 }
             }
         }
+
+    private suspend fun FlowCollector<Pair<String, List<String>>>.processResponse(response: ReceiveMessageResponse) {
+        if (response.hasMessages() && response.messages().size > 0) {
+            val message = response.messages().first()
+            val receiptHandle = message.receiptHandle()
+            logger.info("Message received", "body" to message.body())
+            val body = gson.jsonObject(message.body())
+            if (body.has("Records")) {
+                emit(Pair(receiptHandle, messagePrefixes(body)))
+            }
+        } else {
+            logger.info("No message received")
+            delay(sqsCheckIntervalMs)
+        }
+    }
 
     override suspend fun deleteMessage(receiptHandle: String): DeleteMessageResponse =
         sqs.deleteMessage(deleteMessageRequest(receiptHandle)).asDeferred().await()

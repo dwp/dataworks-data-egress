@@ -46,13 +46,13 @@ class DataKeyServiceImplTest: StringSpec() {
                 on { client() } doReturn httpClient
             }
 
-            val keyService = DataKeyServiceImpl(httpClientProvider, "http://dks:8443")
+            val keyService = DataKeyServiceImpl(httpClientProvider, DATA_KEY_SERVICE_URL)
             val dataKeyResult = keyService.batchDataKey()
             val expectedResult: DataKeyResult = Gson().fromJson(responseBody, DataKeyResult::class.java)
             dataKeyResult shouldBe expectedResult
             val argumentCaptor = argumentCaptor<HttpUriRequest>()
             verify(httpClient, times(1)).execute(argumentCaptor.capture())
-            argumentCaptor.firstValue.uri.toString() shouldMatch  Regex("""^http://dks:8443/datakey\?correlationId=.+$""")
+            argumentCaptor.firstValue.uri.toString() shouldMatch  Regex(DATAKEY_REQUEST_PATTERN)
         }
 
         "testBatchDataKey_ServerError_ThrowsException" {
@@ -67,13 +67,13 @@ class DataKeyServiceImplTest: StringSpec() {
             }
 
             shouldThrow<DataKeyServiceUnavailableException> {
-                val keyService = DataKeyServiceImpl(httpClientProvider, "http://dks:8443")
+                val keyService = DataKeyServiceImpl(httpClientProvider, DATA_KEY_SERVICE_URL)
                 keyService.batchDataKey()
             }
 
             val argumentCaptor = argumentCaptor<HttpGet>()
             verify(httpClient, times(1)).execute(argumentCaptor.capture())
-            argumentCaptor.firstValue.uri.toString() shouldMatch  Regex("""^http://dks:8443/datakey\?correlationId=.+$""")
+            argumentCaptor.firstValue.uri.toString() shouldMatch  Regex(DATAKEY_REQUEST_PATTERN)
         }
 
         "testBatchDataKey_UnknownHttpError_ThrowsException_AndWillRetry" {
@@ -87,13 +87,13 @@ class DataKeyServiceImplTest: StringSpec() {
                 on { client() } doReturn httpClient
             }
             shouldThrow<DataKeyServiceUnavailableException> {
-                val keyService = DataKeyServiceImpl(httpClientProvider, "http://dks:8443")
+                val keyService = DataKeyServiceImpl(httpClientProvider, DATA_KEY_SERVICE_URL)
                 keyService.batchDataKey()
             }
 
             val argumentCaptor = argumentCaptor<HttpGet>()
             verify(httpClient, times(1)).execute(argumentCaptor.capture())
-            argumentCaptor.firstValue.uri.toString() shouldMatch  Regex("""^http://dks:8443/datakey\?correlationId=.+$""")
+            argumentCaptor.firstValue.uri.toString() shouldMatch  Regex(DATAKEY_REQUEST_PATTERN)
         }
 
         "testBatchDataKey_WhenErrorsOccur_WillRetryUntilSuccessful" {
@@ -119,7 +119,7 @@ class DataKeyServiceImplTest: StringSpec() {
                 on { client() } doReturn httpClient
             }
 
-            val keyService = DataKeyServiceImpl(httpClientProvider, "http://dks:8443")
+            val keyService = DataKeyServiceImpl(httpClientProvider, DATA_KEY_SERVICE_URL)
 
 
             shouldThrow<DataKeyServiceUnavailableException> {
@@ -129,7 +129,7 @@ class DataKeyServiceImplTest: StringSpec() {
 
             val argumentCaptor = argumentCaptor<HttpGet>()
             verify(httpClient, times(1)).execute(argumentCaptor.capture())
-            argumentCaptor.firstValue.uri.toString() shouldMatch  Regex("""^http://dks:8443/datakey\?correlationId=.+$""")
+            argumentCaptor.firstValue.uri.toString() shouldMatch  Regex(DATAKEY_REQUEST_PATTERN)
         }
 
         "testDecryptKey_HappyCase_CallsServerOnce_AndReturnsUnencryptedData" {
@@ -153,13 +153,13 @@ class DataKeyServiceImplTest: StringSpec() {
             val httpClientProvider = mock<HttpClientProvider> {
                 on { client() } doReturn httpClient
             }
-            val keyService = DataKeyServiceImpl(httpClientProvider, "http://dks:8443")
+            val keyService = DataKeyServiceImpl(httpClientProvider, DATA_KEY_SERVICE_URL)
             val dataKeyResult = keyService.decryptKey("123", "ENCRYPTED_KEY_ID")
 
             dataKeyResult shouldBe "PLAINTEXT_DATAKEY"
             val argumentCaptor = argumentCaptor<HttpPost>()
             verify(httpClient, times(1)).execute(argumentCaptor.capture())
-            argumentCaptor.firstValue.uri.toString() shouldMatch  Regex("""^http://dks:8443/datakey/actions/decrypt\?keyId=123&correlationId=.+$""")
+            argumentCaptor.firstValue.uri.toString() shouldMatch  Regex(DECRYPT_KEY_REQUEST_PATTERN)
         }
 
         "testDecryptKey_HappyCase_WillCallServerOnce_AndCacheResponse" {
@@ -183,14 +183,14 @@ class DataKeyServiceImplTest: StringSpec() {
             val httpClientProvider = mock<HttpClientProvider> {
                 on { client() } doReturn httpClient
             }
-            val keyService = DataKeyServiceImpl(httpClientProvider, "http://dks:8443")
+            val keyService = DataKeyServiceImpl(httpClientProvider, DATA_KEY_SERVICE_URL)
 
             val dataKeyResult = keyService.decryptKey("123", "ENCRYPTED_KEY_ID")
             dataKeyResult shouldBe "PLAINTEXT_DATAKEY"
 
             val argumentCaptor = argumentCaptor<HttpPost>()
             verify(httpClient, times(1)).execute(argumentCaptor.capture())
-            argumentCaptor.firstValue.uri.toString() shouldMatch  Regex("""^http://dks:8443/datakey/actions/decrypt\?keyId=123&correlationId=.+$""")
+            argumentCaptor.firstValue.uri.toString() shouldMatch  Regex(DECRYPT_KEY_REQUEST_PATTERN)
         }
 
         "testDecryptKey_WithABadKey_WillCallServerOnce_AndNotRetry" {
@@ -203,7 +203,7 @@ class DataKeyServiceImplTest: StringSpec() {
             val httpClientProvider = mock<HttpClientProvider> {
                 on { client() } doReturn httpClient
             }
-            val keyService = DataKeyServiceImpl(httpClientProvider, "http://dks:8443")
+            val keyService = DataKeyServiceImpl(httpClientProvider, DATA_KEY_SERVICE_URL)
 
             val ex = shouldThrow<DataKeyDecryptionException> {
                 keyService.decryptKey("123", "ENCRYPTED_KEY_ID")
@@ -211,8 +211,13 @@ class DataKeyServiceImplTest: StringSpec() {
             ex.message shouldMatch Regex("""Decrypting encryptedKey: 'ENCRYPTED_KEY_ID' with keyEncryptionKeyId: '123' data key service returned status code '400' for dks_correlation_id: '[^']+'""")
             val argumentCaptor = argumentCaptor<HttpPost>()
             verify(httpClient, times(1)).execute(argumentCaptor.capture())
-            argumentCaptor.firstValue.uri.toString() shouldMatch  Regex("""^http://dks:8443/datakey/actions/decrypt\?keyId=123&correlationId=.+$""")
+            argumentCaptor.firstValue.uri.toString() shouldMatch  Regex(DECRYPT_KEY_REQUEST_PATTERN)
         }
 
+    }
+    companion object {
+        private const val DATA_KEY_SERVICE_URL = "http://dks:8443"
+        private const val DATAKEY_REQUEST_PATTERN = """^http://dks:8443/datakey\?correlationId=.+$"""
+        private const val DECRYPT_KEY_REQUEST_PATTERN = """^http://dks:8443/datakey/actions/decrypt\?keyId=123&correlationId=.+$"""
     }
 }

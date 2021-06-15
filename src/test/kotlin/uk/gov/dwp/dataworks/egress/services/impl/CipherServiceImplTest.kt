@@ -8,32 +8,29 @@ import java.security.SecureRandom
 class CipherServiceImplTest: StringSpec() {
 
     init {
-        "testEncryptionDecryption" {
+        "Decrypting encrypted should give plaintext" {
             val cipherService = CipherServiceImpl(SecureRandom.getInstance("SHA1PRNG"), CIPHER_TRANSFORMATION)
-            val key = "czMQLgW/OrzBZwFV9u4EBA=="
             val original = "Original unencrypted text that should come out of decrypt".toByteArray()
-            val (initialisationVector, encrypted) = cipherService.encrypt(key, original)
-            val decrypted = cipherService.decrypt(key, initialisationVector, encrypted)
+            val (initialisationVector, encrypted) = cipherService.encrypt(DATA_KEY, original)
+            val decrypted = cipherService.decrypt(DATA_KEY, initialisationVector, encrypted)
             decrypted shouldBe original
         }
 
-        "testWrongKey" {
+        "Wrong key should give wrong plaintext" {
             val cipherService = CipherServiceImpl(SecureRandom.getInstance("SHA1PRNG"), CIPHER_TRANSFORMATION)
-            val key = "czMQLgW/OrzBZwFV9u4EBA=="
             val original = "Original unencrypted text that should come out of decrypt."
-            val (initialisationVector, encrypted) = cipherService.encrypt(key, original.toByteArray())
-            val decrypted = cipherService.decrypt(key.replace('c', 'd'), initialisationVector, encrypted)
+            val (initialisationVector, encrypted) = cipherService.encrypt(DATA_KEY, original.toByteArray())
+            val decrypted = cipherService.decrypt(DATA_KEY.replace('c', 'd'), initialisationVector, encrypted)
             decrypted shouldNotBe original
         }
 
-        "wrongIv" {
+        "Wrong IV should give wrong plaintext" {
             val cipherService = CipherServiceImpl(SecureRandom.getInstance("SHA1PRNG"), CIPHER_TRANSFORMATION)
-            val key = "czMQLgW/OrzBZwFV9u4EBA=="
             val original = "Original unencrypted text that should come out of decrypt."
-            val (initialisationVector, encrypted) = cipherService.encrypt(key, original.toByteArray())
+            val (initialisationVector, encrypted) = cipherService.encrypt(DATA_KEY, original.toByteArray())
             val firstChar = initialisationVector[0]
             val decrypted =
-                cipherService.decrypt(key, initialisationVector.replace(firstChar, firstChar + 1), encrypted)
+                cipherService.decrypt(DATA_KEY, initialisationVector.replace(firstChar, firstChar + 1), encrypted)
             decrypted shouldNotBe original
         }
 
@@ -41,5 +38,6 @@ class CipherServiceImplTest: StringSpec() {
 
     companion object {
         private const val CIPHER_TRANSFORMATION = "AES/CTR/NoPadding"
+        private const val DATA_KEY = "czMQLgW/OrzBZwFV9u4EBA=="
     }
 }
