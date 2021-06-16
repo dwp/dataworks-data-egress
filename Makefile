@@ -2,6 +2,7 @@ SHELL:=bash
 
 aws_profile=default
 aws_region=eu-west-2
+aws_mgmt_dev_account=
 
 default: help
 
@@ -42,6 +43,31 @@ terraform-apply: ## Run `terraform apply` from repo root
 terraform-workspace-new: ## Creates new Terraform workspace with Concourse remote execution. Run `terraform-workspace-new workspace=<workspace_name>`
 	fly -t aws-concourse execute --config create-workspace.yml --input repo=. -v workspace="$(workspace)"
 
-.PHONY: tests
-tests:
-	@tox
+certificates:
+	./generate-certificates.sh
+
+localstack:
+	docker-compose up -d localstack
+	@{ \
+		while ! docker logs localstack 2> /dev/null | grep -q "^Ready\." ; do \
+			echo Waiting for localstack.; \
+			sleep 2; \
+		done; \
+	}
+	docker-compose up localstack-init
+
+dks:
+	docker-compose up -d dks
+
+services: localstack dks
+
+dataworks-data-egress: services
+	docker-compose up -d dataworks-data-egress
+
+integration-tests: dataworks-data-egress
+	docker-compose up dataworks-data-egress-integration-tests
+
+ecr:
+	aws ecr get-login-password --region $(aws_region) --profile dataworks-management-dev | docker login --username AWS --password-stdin $(aws_mgmt_dev_account).dkr.ecr.$(aws_region).amazonaws.com
+	docker tag dataworks-data-egress $(aws_mgmt_dev_account).dkr.ecr.$(aws_region).amazonaws.com/dataworks-data-egress:development
+	docker push $(aws_mgmt_dev_account).dkr.ecr.$(aws_region).amazonaws.com/dataworks-data-egress:development

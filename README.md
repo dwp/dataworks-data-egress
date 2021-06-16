@@ -10,21 +10,12 @@ After cloning this repo, please run:
 
 ## Testing locally
 
-To run the tests, you will need [tox](https://tox.readthedocs.io/en/latest/) installed:
+To run the integration tests
 
 ```
-$ pip install tox
-$ tox
+$ make certificates
+$ make integration-tests
 ```
-Running `tox` from this directory will run all the tests.
 
 Note that there is no requirement to have any AWS connectivity - it is stubbed to avoid incurring any
 costs when running the tests.
-
-### Cleaning outputs locally
-
-Running the following will remove all the local files created by tox, in case you need to tidy up:
-
-```
-rm -rf build dist .tox
-```

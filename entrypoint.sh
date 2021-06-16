@@ -1,27 +1,50 @@
 #!/bin/sh
 
-set -e
+# shellcheck disable=SC2155
+# shellcheck disable=SC2154
 
-export HTTP_PROXY="http://${internet_proxy}:3128"
-export HTTPS_PROXY="$HTTP_PROXY"
-export NO_PROXY="${non_proxied_endpoints},${dks_fqdn}"
+if [ "${internet_proxy}" ]; then
+    export http_proxy="http://${internet_proxy}:3128"
+    export HTTP_PROXY="$http_proxy"
+    export https_proxy="$http_proxy"
+    export HTTPS_PROXY="$https_proxy"
+    export no_proxy="${non_proxied_endpoints}"
+    export NO_PROXY="$no_proxy"
+    echo "Using proxy ${internet_proxy}"
+fi
 
+HOSTNAME=$(hostname)
 
-export ACM_KEY_PASSWORD=$(uuidgen -r)
-echo "Retrieving acm certs"
-acm-cert-retriever \
---acm-cert-arn "${acm_cert_arn}" \
---acm-key-passphrase "$ACM_KEY_PASSWORD" \
---private-key-alias "${private_key_alias}" \
---truststore-aliases "${truststore_aliases}" \
---truststore-certs "${truststore_certs}"
+if [ "${FETCH_ACM_CERTS:-true}" = "true" ]; then
 
-cd /usr/local/share/ca-certificates/
-touch data_egress_ca.pem
+    KEYSTORE_DIRECTORY="$(mktemp -d)"
 
-TRUSTSTORE_ALIASES="${truststore_aliases}"
-for F in $(echo $TRUSTSTORE_ALIASES | sed "s/,/ /g"); do
- (cat "$F.crt"; echo) >> data_egress_ca.pem;
-done
+    export SECURITY_KEY_PASSWORD="$(uuidgen)"
+    export SECURITY_KEYSTORE="$KEYSTORE_DIRECTORY/keystore.jks"
+    export SECURITY_KEYSTORE_PASSWORD="$(uuidgen)"
+    export SECURITY_KEYSTORE_ALIAS="${private_key_alias}"
 
+    export SECURITY_TRUSTSTORE="$KEYSTORE_DIRECTORY/truststore.jks"
+    export SECURITY_TRUSTSTORE_PASSWORD="$(uuidgen)"
+    export RETRIEVER_ACM_KEY_PASSPHRASE="$(uuidgen)"
+
+    acm-cert-retriever \
+        --acm-cert-arn "${acm_cert_arn}" \
+        --log-level INFO \
+        --acm-key-passphrase "${RETRIEVER_ACM_KEY_PASSPHRASE}" \
+        --keystore-path "$SECURITY_KEYSTORE" \
+        --keystore-password "$SECURITY_KEYSTORE_PASSWORD" \
+        --private-key-password "$SECURITY_KEY_PASSWORD" \
+        --truststore-path "$SECURITY_TRUSTSTORE" \
+        --truststore-password "$SECURITY_TRUSTSTORE_PASSWORD" \
+        --private-key-alias "$SECURITY_KEYSTORE_ALIAS" \
+        --truststore-aliases "${truststore_aliases}" \
+        --truststore-certs "${truststore_certs}"
+
+    echo "Cert retrieve result is $? for ${acm_cert_arn}"
+else
+    echo "Skipping cert generation "
+fi
+
+export SPRING_MAIN_BANNER_MODE=off
 exec "${@}"
