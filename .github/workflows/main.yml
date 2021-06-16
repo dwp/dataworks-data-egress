@@ -76,6 +76,8 @@ jobs:
       - name: Get release version
         id: get_version
         run: echo RELEASE_VERSION=$(echo ${GITHUB_REF:10}) >> $GITHUB_ENV
+      - name: generate developer certificates
+        run: make certificates
       - name: Publish to DockerHub
         uses: elgohr/Publish-Docker-Github-Action@master
         with:
