@@ -22,7 +22,7 @@ import com.amazonaws.services.s3.model.S3Object as S3ObjectVersion1
 
 class DataServiceImplTest: WordSpec() {
     init {
-        "s3Service" should {
+        "dataService" should {
             "decrypt" {
                 val objects = objectsSummaries()
                 val objectsWithContents = objectsWithContents()
@@ -51,7 +51,7 @@ class DataServiceImplTest: WordSpec() {
                 }
                 val compressionService = mock<CompressionService>()
 
-                val s3Service = DataServiceImpl(s3AsyncClient,
+                val dataService = DataServiceImpl(s3AsyncClient,
                     s3Client,
                     decryptingS3Client,
                     assumedRoleClientProvider,
@@ -64,7 +64,7 @@ class DataServiceImplTest: WordSpec() {
                     DESTINATION_BUCKET, DESTINATION_PREFIX, S3_TRANSFER_TYPE,
                     decrypt = true, compress = false, null, null)
 
-                s3Service.egressObjects(specification)
+                dataService.egressObjects(specification)
                 verify(s3Client, times(100)).getObject(any<GetObjectRequest>())
                 verifyNoMoreInteractions(s3Client)
 
@@ -141,7 +141,7 @@ class DataServiceImplTest: WordSpec() {
                 val compressionService = mock<CompressionService> {
                     on { compress(any(), any()) } doReturn "COMPRESSED_CONTENTS".toByteArray()
                 }
-                val s3Service = DataServiceImpl(s3AsyncClient,
+                val dataService = DataServiceImpl(s3AsyncClient,
                     s3Client,
                     decryptingS3Client,
                     assumedRoleClientProvider,
@@ -153,7 +153,7 @@ class DataServiceImplTest: WordSpec() {
                 val specification = EgressSpecification(SOURCE_BUCKET, SOURCE_PREFIX,
                     DESTINATION_BUCKET, DESTINATION_PREFIX, S3_TRANSFER_TYPE,
                     decrypt = false, compress = true, "gz", "ROLE_ARN")
-                s3Service.egressObjects(specification)
+                dataService.egressObjects(specification)
                 verify(s3Client, times(100)).getObject(any<GetObjectRequest>())
                 verifyNoMoreInteractions(s3Client)
 
@@ -254,6 +254,7 @@ class DataServiceImplTest: WordSpec() {
         private const val DESTINATION_BUCKET = "DESTINATION_BUCKET"
         private const val DESTINATION_PREFIX = "DESTINATION_PREFIX"
         private const val S3_TRANSFER_TYPE = "S3"
+        private const val SFT_TRANSFER_TYPE = "SFT"
 
 
         private const val ENCRYPTING_KEY_ID_METADATA_KEY = "datakeyencryptionkeyid"
