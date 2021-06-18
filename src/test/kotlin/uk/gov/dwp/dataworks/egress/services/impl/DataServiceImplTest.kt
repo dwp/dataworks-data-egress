@@ -207,10 +207,10 @@ class DataServiceImplTest: WordSpec() {
                     dataKeyService,
                     cipherService,
                     compressionService)
-
-
+                val currentDirectory = System.getProperty("user.dir")
+                val testFolderLocation = "/$currentDirectory/sftTest"
                 val specification = EgressSpecification(SOURCE_BUCKET, SOURCE_PREFIX,
-                    DESTINATION_BUCKET, DESTINATION_PREFIX, SFT_TRANSFER_TYPE,
+                    DESTINATION_BUCKET, testFolderLocation, SFT_TRANSFER_TYPE,
                     decrypt = true, compress = false, null, null)
 
                 dataService.egressObjects(specification)
@@ -235,7 +235,7 @@ class DataServiceImplTest: WordSpec() {
 
 
 
-                val file = File("/Users/markstevens/egressTest")
+                val file = File(testFolderLocation)
                 val filesCount = getFilesCount(file)
                 assert(filesCount == 100)
                 file.deleteRecursively()

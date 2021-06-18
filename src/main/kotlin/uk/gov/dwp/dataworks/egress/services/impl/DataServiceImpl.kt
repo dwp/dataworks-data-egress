@@ -200,16 +200,9 @@ class DataServiceImpl(private val s3AsyncClient: S3AsyncClient,
         }
 
     private fun writeToFile(fileName: String, folder: String, targetContents: ByteArray ) {
-//        val path = "/$folder/$fileName"
-        val folderPath = "/Users/markstevens/egressTest"
-        File(folderPath).mkdirs()
-
-        val path = "/$folderPath/$fileName"
+        File("/$folder").mkdirs()
+        val path = "/$folder/$fileName"
         val file = File(path)
-
-//        File("/$folder").mkdirs()
-////        val path = "/$folder/$fileName"
-//        val file = File(path)
         file.writeBytes(targetContents)
     }
 
