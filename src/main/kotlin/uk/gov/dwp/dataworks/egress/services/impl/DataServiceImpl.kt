@@ -55,9 +55,14 @@ class DataServiceImpl(private val s3AsyncClient: S3AsyncClient,
                     putObjectRequest(specification, key)
                 }
                 egressClient(specification).putObject(request, AsyncRequestBody.fromBytes(targetContents)).await()
+                true
+            } else if (specification.transferType.equals("SFT", true)) {
+                writeToFile(key, specification.destinationPrefix, targetContents)
+                true
+            } else {
+            logger.warn("Unsupported transfer type", "specification" to "$specification")
+                false
             }
-
-            true
         } catch (e: Exception) {
             logger.error("Failed to egress object", e, "key" to key, "specification" to "$specification")
             false
@@ -193,6 +198,13 @@ class DataServiceImpl(private val s3AsyncClient: S3AsyncClient,
             key(key)
             build()
         }
+
+    private fun writeToFile(fileName: String, folder: String, targetContents: ByteArray ) {
+        val path = "/$folder/$fileName"
+        val file =  File(path)
+        file.mkdirs()
+        file.writeBytes(targetContents)
+    }
 
     companion object {
         private val logger = DataworksLogger.getLogger(DataServiceImpl::class)
