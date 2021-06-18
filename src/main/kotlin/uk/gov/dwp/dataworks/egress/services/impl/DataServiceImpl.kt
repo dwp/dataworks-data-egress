@@ -17,20 +17,20 @@ import uk.gov.dwp.dataworks.egress.domain.EgressSpecification
 import uk.gov.dwp.dataworks.egress.services.CipherService
 import uk.gov.dwp.dataworks.egress.services.CompressionService
 import uk.gov.dwp.dataworks.egress.services.DataKeyService
-import uk.gov.dwp.dataworks.egress.services.S3Service
+import uk.gov.dwp.dataworks.egress.services.DataService
 import uk.gov.dwp.dataworks.logging.DataworksLogger
 import java.io.ByteArrayOutputStream
 import java.io.File
 import com.amazonaws.services.s3.model.GetObjectRequest as GetObjectRequestVersion1
 
 @Service
-class S3ServiceImpl(private val s3AsyncClient: S3AsyncClient,
-                    private val s3Client: S3Client,
-                    private val decryptingS3Client: AmazonS3EncryptionV2,
-                    private val assumedRoleS3ClientProvider: suspend (String) -> S3AsyncClient,
-                    private val dataKeyService: DataKeyService,
-                    private val cipherService: CipherService,
-                    private val compressionService: CompressionService): S3Service {
+class DataServiceImpl(private val s3AsyncClient: S3AsyncClient,
+                      private val s3Client: S3Client,
+                      private val decryptingS3Client: AmazonS3EncryptionV2,
+                      private val assumedRoleS3ClientProvider: suspend (String) -> S3AsyncClient,
+                      private val dataKeyService: DataKeyService,
+                      private val cipherService: CipherService,
+                      private val compressionService: CompressionService): DataService {
 
     override suspend fun egressObjects(specifications: List<EgressSpecification>): Boolean =
         specifications.map { specification -> egressObjects(specification) }.all { it }
@@ -192,7 +192,7 @@ class S3ServiceImpl(private val s3AsyncClient: S3AsyncClient,
         }
 
     companion object {
-        private val logger = DataworksLogger.getLogger(S3ServiceImpl::class)
+        private val logger = DataworksLogger.getLogger(DataServiceImpl::class)
         private const val MATERIALS_DESCRIPTION_METADATA_KEY = "x-amz-matdesc"
         private const val ENCRYPTING_KEY_ID_METADATA_KEY = "datakeyencryptionkeyid"
         private const val INITIALISATION_VECTOR_METADATA_KEY = "iv"

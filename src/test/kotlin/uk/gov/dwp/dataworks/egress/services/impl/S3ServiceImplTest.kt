@@ -51,7 +51,7 @@ class S3ServiceImplTest: WordSpec() {
                 }
                 val compressionService = mock<CompressionService>()
 
-                val s3Service = S3ServiceImpl(s3AsyncClient,
+                val s3Service = DataServiceImpl(s3AsyncClient,
                     s3Client,
                     decryptingS3Client,
                     assumedRoleClientProvider,
@@ -141,7 +141,7 @@ class S3ServiceImplTest: WordSpec() {
                 val compressionService = mock<CompressionService> {
                     on { compress(any(), any()) } doReturn "COMPRESSED_CONTENTS".toByteArray()
                 }
-                val s3Service = S3ServiceImpl(s3AsyncClient,
+                val s3Service = DataServiceImpl(s3AsyncClient,
                     s3Client,
                     decryptingS3Client,
                     assumedRoleClientProvider,
