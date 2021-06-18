@@ -48,12 +48,15 @@ class DataServiceImpl(private val s3AsyncClient: S3AsyncClient,
             logger.info("Got metadata", "metadata" to "$metadata")
             val sourceContents = sourceContents(metadata, specification, key)
             val targetContents = targetContents(specification, sourceContents)
-            val request = if (wasEncryptedByHtme(metadata) && !specification.decrypt) {
-                putObjectRequestWithEncryptionMetadata(specification, key, metadata)
-            } else {
-                putObjectRequest(specification, key)
+            if (specification.transferType.equals("S3", true)) {
+                val request = if (wasEncryptedByHtme(metadata) && !specification.decrypt) {
+                    putObjectRequestWithEncryptionMetadata(specification, key, metadata)
+                } else {
+                    putObjectRequest(specification, key)
+                }
+                egressClient(specification).putObject(request, AsyncRequestBody.fromBytes(targetContents)).await()
             }
-            egressClient(specification).putObject(request, AsyncRequestBody.fromBytes(targetContents)).await()
+
             true
         } catch (e: Exception) {
             logger.error("Failed to egress object", e, "key" to key, "specification" to "$specification")

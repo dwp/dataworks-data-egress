@@ -20,7 +20,7 @@ import java.io.ByteArrayInputStream
 import java.util.concurrent.CompletableFuture
 import com.amazonaws.services.s3.model.S3Object as S3ObjectVersion1
 
-class S3ServiceImplTest: WordSpec() {
+class DataServiceImplTest: WordSpec() {
     init {
         "s3Service" should {
             "decrypt" {
@@ -253,7 +253,7 @@ class S3ServiceImplTest: WordSpec() {
         private const val SOURCE_PREFIX = "SOURCE_PREFIX"
         private const val DESTINATION_BUCKET = "DESTINATION_BUCKET"
         private const val DESTINATION_PREFIX = "DESTINATION_PREFIX"
-        private const val TRANSFER_TYPE = "TRANSFER_TYPE"
+        private const val TRANSFER_TYPE = "S3"
 
 
         private const val ENCRYPTING_KEY_ID_METADATA_KEY = "datakeyencryptionkeyid"
