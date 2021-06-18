@@ -28,7 +28,7 @@ class DbServiceImpl(private val dynamoDb: DynamoDbAsyncClient,
         EgressSpecification(
             sourceBucket = attributeStringValue(dynamoDbRecord, SOURCE_BUCKET_COLUMN),
             sourcePrefix = attributeStringValue(dynamoDbRecord, SOURCE_PREFIX_COLUMN).replace(TODAYS_DATE_PLACEHOLDER,
-                todaysDate()),
+                todaysDate()).replace(Regex("""\*$"""), ""),
             destinationBucket = attributeStringValue(dynamoDbRecord, DESTINATION_BUCKET_COLUMN),
             destinationPrefix = attributeStringValue(dynamoDbRecord, DESTINATION_PREFIX_COLUMN).replace(TODAYS_DATE_PLACEHOLDER,
                 todaysDate()),
