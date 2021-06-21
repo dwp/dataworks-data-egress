@@ -31,6 +31,8 @@ services:
     build:
       context: .
     container_name: dataworks-data-egress
+    volumes:
+      - shared-tmpfs:/dataworks-data-egress
     environment:
       - AWS_REGION=eu-west-2
       - AWS_SQS_QUEUE_URL=http://localstack:4566/000000000000/integration-queue
@@ -52,6 +54,17 @@ services:
       dockerfile: images/tests/Dockerfile
     container_name: dataworks-data-egress-integration-tests
     command: "gradle integration"
+    volumes:
+      - shared-tmpfs:/dataworks-data-egress
     environment:
       - AWS_REGION=eu-west-2
       - SPRING_PROFILES_ACTIVE=LOCALSTACK
+
+volumes:
+  shared-tmpfs:
+    driver: local
+    driver_opts:
+      type: "tmpfs"
+      device: "tmpfs"
+      o: "size=256m,uid=1000"
+
