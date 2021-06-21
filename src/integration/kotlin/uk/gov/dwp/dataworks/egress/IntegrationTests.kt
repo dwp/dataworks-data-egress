@@ -170,24 +170,16 @@ class IntegrationTests: StringSpec() {
             sqs.sendMessage(request).await()
 
             withTimeout(Duration.ofSeconds(TEST_TIMEOUT)) {
-                delay(5000)
                 val file = File("/$identifier/SFT")
-
-                val fileExists = file.exists()
-                logger.info("Destination file exists: '$fileExists'")
-
-                val filesCount = getFilesCount(file)
-                logger.info("Number of sft files written '$filesCount'")
-                assert(filesCount == 1)
+                while(! file.exists() ) {
+                    logger.info("Destination file  doesn't exist")
+                    delay(2000)
+                }
+                val filesWritten = file.listFiles()
+                logger.info("Number of sft files written '$filesWritten'")
+                assert(filesWritten.size == 1)
             }
         }
-    }
-
-    private fun getFilesCount(file: File): Int {
-        val files = file.listFiles()
-        var count = 0
-        for (f in files) if (f.isDirectory) count += getFilesCount(f) else count++
-        return count
     }
 
     private suspend fun verifyEgress(sourceContents: String,
