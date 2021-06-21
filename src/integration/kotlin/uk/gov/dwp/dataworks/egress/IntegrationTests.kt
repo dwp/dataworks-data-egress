@@ -170,6 +170,8 @@ class IntegrationTests: StringSpec() {
             sqs.sendMessage(request).await()
 
             withTimeout(Duration.ofSeconds(TEST_TIMEOUT)) {
+                val testFile = File("/$identifier").exists()
+                logger.info("Directory exists: '$testFile'")
                 val file = File("/$identifier/SFT")
                 while(! file.exists() ) {
                     logger.info("Destination file  doesn't exist")
