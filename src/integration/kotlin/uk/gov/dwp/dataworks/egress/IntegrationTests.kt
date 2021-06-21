@@ -29,6 +29,7 @@ import uk.gov.dwp.dataworks.egress.services.DataKeyService
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.nio.file.Files
 import java.text.SimpleDateFormat
 import java.time.Duration
 import java.util.*
@@ -170,6 +171,10 @@ class IntegrationTests: StringSpec() {
 
             withTimeout(Duration.ofSeconds(TEST_TIMEOUT)) {
                 val file = File("/$identifier/SFT")
+
+                val fileExists = file.exists()
+                logger.info("Destination file exists: '$fileExists'")
+
                 val filesCount = getFilesCount(file)
                 logger.info("Number of sft files written '$filesCount'")
                 assert(filesCount == 100)
