@@ -61,7 +61,7 @@ class DataServiceImpl(private val s3AsyncClient: S3AsyncClient,
                 writeToFile(File(key).name, specification.destinationPrefix, targetContents)
                 true
             } else {
-            logger.warn("Unsupported transfer type", "specification" to "$specification")
+                logger.warn("Unsupported transfer type", "specification" to "$specification")
                 false
             }
         } catch (e: Exception) {
