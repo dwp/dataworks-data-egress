@@ -63,6 +63,26 @@ class DbServiceImplTest: WordSpec() {
                 val entries = dbService.tableEntryMatches(receivedPrefix)
                 entries shouldContainExactly listOf(egressSpecification("$interpolatedPrefix/"))
             }
+
+            "match items with wildcard" {
+                val interpolatedPrefix = "source/prefix/${todaysDate()}"
+                val receivedPrefix = "$interpolatedPrefix/pipeline_success.flag"
+                val matchingPrefix = "source/prefix/$TODAYS_DATE_PLACEHOLDER/*"
+
+                val matchingItem = egressTableItem(matchingPrefix)
+                val scanResponse = with(ScanResponse.builder()) {
+                    items(matchingItem)
+                    build()
+                }
+                val scanFuture = CompletableFuture.completedFuture(scanResponse)
+                val dynamoDb = mock<DynamoDbAsyncClient> {
+                    on { scan(any<ScanRequest>()) } doReturn scanFuture
+                }
+                val dbService = DbServiceImpl(dynamoDb, DATA_EGRESS_TABLE)
+                val entries = dbService.tableEntryMatches(receivedPrefix)
+                entries shouldContainExactly listOf(egressSpecification("$interpolatedPrefix/"))
+            }
+
         }
     }
 
