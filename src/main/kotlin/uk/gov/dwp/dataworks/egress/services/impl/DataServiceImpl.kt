@@ -17,20 +17,21 @@ import uk.gov.dwp.dataworks.egress.domain.EgressSpecification
 import uk.gov.dwp.dataworks.egress.services.CipherService
 import uk.gov.dwp.dataworks.egress.services.CompressionService
 import uk.gov.dwp.dataworks.egress.services.DataKeyService
-import uk.gov.dwp.dataworks.egress.services.S3Service
+import uk.gov.dwp.dataworks.egress.services.DataService
 import uk.gov.dwp.dataworks.logging.DataworksLogger
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.lang.RuntimeException
 import com.amazonaws.services.s3.model.GetObjectRequest as GetObjectRequestVersion1
 
 @Service
-class S3ServiceImpl(private val s3AsyncClient: S3AsyncClient,
-                    private val s3Client: S3Client,
-                    private val decryptingS3Client: AmazonS3EncryptionV2,
-                    private val assumedRoleS3ClientProvider: suspend (String) -> S3AsyncClient,
-                    private val dataKeyService: DataKeyService,
-                    private val cipherService: CipherService,
-                    private val compressionService: CompressionService): S3Service {
+class DataServiceImpl(private val s3AsyncClient: S3AsyncClient,
+                      private val s3Client: S3Client,
+                      private val decryptingS3Client: AmazonS3EncryptionV2,
+                      private val assumedRoleS3ClientProvider: suspend (String) -> S3AsyncClient,
+                      private val dataKeyService: DataKeyService,
+                      private val cipherService: CipherService,
+                      private val compressionService: CompressionService): DataService {
 
     override suspend fun egressObjects(specifications: List<EgressSpecification>): Boolean =
         specifications.map { specification -> egressObjects(specification) }.all { it }
@@ -48,13 +49,21 @@ class S3ServiceImpl(private val s3AsyncClient: S3AsyncClient,
             logger.info("Got metadata", "metadata" to "$metadata")
             val sourceContents = sourceContents(metadata, specification, key)
             val targetContents = targetContents(specification, sourceContents)
-            val request = if (wasEncryptedByHtme(metadata) && !specification.decrypt) {
-                putObjectRequestWithEncryptionMetadata(specification, key, metadata)
+            if (specification.transferType.equals("S3", true)) {
+                val request = if (wasEncryptedByHtme(metadata) && !specification.decrypt) {
+                    putObjectRequestWithEncryptionMetadata(specification, key, metadata)
+                } else {
+                    putObjectRequest(specification, key)
+                }
+                egressClient(specification).putObject(request, AsyncRequestBody.fromBytes(targetContents)).await()
+                true
+            } else if (specification.transferType.equals("SFT", true)) {
+                writeToFile(File(key).name, specification.destinationPrefix, targetContents)
+                true
             } else {
-                putObjectRequest(specification, key)
+                logger.warn("Unsupported transfer type", "specification" to "$specification")
+                false
             }
-            egressClient(specification).putObject(request, AsyncRequestBody.fromBytes(targetContents)).await()
-            true
         } catch (e: Exception) {
             logger.error("Failed to egress object", e, "key" to key, "specification" to "$specification")
             false
@@ -191,8 +200,24 @@ class S3ServiceImpl(private val s3AsyncClient: S3AsyncClient,
             build()
         }
 
+    private fun writeToFile(fileName: String, folder: String, targetContents: ByteArray ) {
+        val parent = File(if (folder.startsWith("/")) folder else "/$folder")
+
+        if (!parent.isDirectory) {
+            logger.info("Making parent directory", "parent" to "$parent", "filename" to fileName)
+            if (!parent.mkdirs()) {
+                logger.error("Failed to make parent directories", "parent" to "$parent", "filename" to fileName)
+                throw RuntimeException("Failed to make parent directories, parent: '$parent', filename: '$fileName'")
+            }
+        }
+
+        val file = File(parent, fileName)
+        logger.info("Writing file", "file" to "$file", "parent" to "$parent", "filename" to fileName)
+        file.writeBytes(targetContents)
+    }
+
     companion object {
-        private val logger = DataworksLogger.getLogger(S3ServiceImpl::class)
+        private val logger = DataworksLogger.getLogger(DataServiceImpl::class)
         private const val MATERIALS_DESCRIPTION_METADATA_KEY = "x-amz-matdesc"
         private const val ENCRYPTING_KEY_ID_METADATA_KEY = "datakeyencryptionkeyid"
         private const val INITIALISATION_VECTOR_METADATA_KEY = "iv"
@@ -200,4 +225,3 @@ class S3ServiceImpl(private val s3AsyncClient: S3AsyncClient,
         private val excludedObjects = listOf("pipeline_success.flag")
     }
 }
-

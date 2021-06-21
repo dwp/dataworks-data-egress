@@ -28,6 +28,8 @@ import uk.gov.dwp.dataworks.egress.services.CipherService
 import uk.gov.dwp.dataworks.egress.services.DataKeyService
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.File
+import java.nio.file.Files
 import java.text.SimpleDateFormat
 import java.time.Duration
 import java.util.*
@@ -84,7 +86,7 @@ class IntegrationTests: StringSpec() {
                 build()
             }
             s3.putObject(putRequest, AsyncRequestBody.fromBytes(encrypted)).await()
-            insertEgressItem("$identifier/", "$identifier/", false)
+            insertEgressItem("$identifier/", "$identifier/", TRANSFER_TYPE, false)
             val message = messageBody("$identifier/$PIPELINE_SUCCESS_FLAG")
             val request = sendMessageRequest(message)
             sqs.sendMessage(request).await()
@@ -117,7 +119,7 @@ class IntegrationTests: StringSpec() {
                 build()
             }
             s3.putObject(putRequest, AsyncRequestBody.fromString(sourceContents)).await()
-            insertEgressItem("$identifier/\$TODAYS_DATE", "$identifier/\$TODAYS_DATE")
+            insertEgressItem("$identifier/\$TODAYS_DATE", "$identifier/\$TODAYS_DATE", TRANSFER_TYPE)
             val message = messageBody("$identifier/${todaysDate()}/$PIPELINE_SUCCESS_FLAG")
             val request = sendMessageRequest(message)
             sqs.sendMessage(request).await()
@@ -152,13 +154,40 @@ class IntegrationTests: StringSpec() {
             s3.putObject(putRequest, AsyncRequestBody.fromBytes(sourceContents.toByteArray())).await()
             verifyEgress(sourceContents, identifier, false, "z")
         }
+
+        "Should save SFT files to disk" {
+            val identifier = "sft"
+            val sourceContents = sourceContents(identifier)
+            val putRequest = with(PutObjectRequest.builder()) {
+                bucket(SOURCE_BUCKET)
+                key("/dataworks-data-egress/sft/$identifier.csv")
+                build()
+            }
+            s3.putObject(putRequest, AsyncRequestBody.fromString(sourceContents)).await()
+            insertEgressItem("/dataworks-data-egress/sft", "/testData/sft", SFT_TRANSFER_TYPE)
+            val message = messageBody("/dataworks-data-egress/sft/$PIPELINE_SUCCESS_FLAG")
+            val request = sendMessageRequest(message)
+            sqs.sendMessage(request).await()
+
+            withTimeout(Duration.ofSeconds(TEST_TIMEOUT)) {
+                val testFile = File("/testData").exists()
+                logger.info("Directory exists: '$testFile'")
+                val file = File("/testData/sft/$identifier.csv")
+                while (!file.exists() ) {
+                    logger.info("$file doesn't exist")
+                    delay(2000)
+                }
+                
+                file.readText() shouldBe sourceContents
+            }
+        }
     }
 
     private suspend fun verifyEgress(sourceContents: String,
                                      identifier: String,
                                      decrypt: Boolean = true,
                                      compressionFormat: String = "") {
-        insertEgressItem("$identifier/", "$identifier/", decrypt, compressionFormat)
+        insertEgressItem("$identifier/", "$identifier/", TRANSFER_TYPE, decrypt, compressionFormat)
         val message = messageBody("$identifier/$PIPELINE_SUCCESS_FLAG")
         val request = sendMessageRequest(message)
         sqs.sendMessage(request).await()
@@ -234,7 +263,7 @@ class IntegrationTests: StringSpec() {
 
 
     private suspend fun insertEgressItem(sourcePrefix: String, destinationPrefix: String,
-                                         decrypt: Boolean = false,
+                                         transferType: String, decrypt: Boolean = false,
                                          compressionFormat: String = ""): PutItemResponse {
         val baseRecord = mapOf<String, AttributeValue>(
             egressColumn(SOURCE_BUCKET_FIELD_NAME, SOURCE_BUCKET),
@@ -242,7 +271,7 @@ class IntegrationTests: StringSpec() {
             egressColumn(PIPELINE_FIELD_NAME, PIPELINE_NAME),
             egressColumn(SOURCE_PREFIX_FIELD_NAME, sourcePrefix),
             egressColumn(DESTINATION_PREFIX_FIELD_NAME, destinationPrefix),
-            egressColumn(TRANSFER_TYPE_FIELD_NAME, TRANSFER_TYPE))
+            egressColumn(TRANSFER_TYPE_FIELD_NAME, transferType))
 
         val withOptionalCompressionFields = baseRecord.let { r ->
             compressionFormat.takeIf(String::isNotBlank)?.let { format ->
@@ -276,6 +305,7 @@ class IntegrationTests: StringSpec() {
         private const val SOURCE_BUCKET = "source"
         private const val DESTINATION_BUCKET = "destination"
         private const val TRANSFER_TYPE = "S3"
+        private const val SFT_TRANSFER_TYPE = "SFT"
 
         private const val ENCRYPTING_KEY_ID_METADATA_KEY = "datakeyencryptionkeyid"
         private const val INITIALISATION_VECTOR_METADATA_KEY = "iv"

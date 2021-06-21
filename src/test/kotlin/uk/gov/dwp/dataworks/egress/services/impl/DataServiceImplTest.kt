@@ -17,12 +17,13 @@ import uk.gov.dwp.dataworks.egress.services.CipherService
 import uk.gov.dwp.dataworks.egress.services.CompressionService
 import uk.gov.dwp.dataworks.egress.services.DataKeyService
 import java.io.ByteArrayInputStream
+import java.io.File
 import java.util.concurrent.CompletableFuture
 import com.amazonaws.services.s3.model.S3Object as S3ObjectVersion1
 
-class S3ServiceImplTest: WordSpec() {
+class DataServiceImplTest: WordSpec() {
     init {
-        "s3Service" should {
+        "dataService" should {
             "decrypt" {
                 val objects = objectsSummaries()
                 val objectsWithContents = objectsWithContents()
@@ -51,7 +52,7 @@ class S3ServiceImplTest: WordSpec() {
                 }
                 val compressionService = mock<CompressionService>()
 
-                val s3Service = S3ServiceImpl(s3AsyncClient,
+                val dataService = DataServiceImpl(s3AsyncClient,
                     s3Client,
                     decryptingS3Client,
                     assumedRoleClientProvider,
@@ -61,10 +62,10 @@ class S3ServiceImplTest: WordSpec() {
 
 
                 val specification = EgressSpecification(SOURCE_BUCKET, SOURCE_PREFIX,
-                    DESTINATION_BUCKET, DESTINATION_PREFIX, TRANSFER_TYPE,
+                    DESTINATION_BUCKET, DESTINATION_PREFIX, S3_TRANSFER_TYPE,
                     decrypt = true, compress = false, null, null)
 
-                s3Service.egressObjects(specification)
+                dataService.egressObjects(specification)
                 verify(s3Client, times(100)).getObject(any<GetObjectRequest>())
                 verifyNoMoreInteractions(s3Client)
 
@@ -141,7 +142,7 @@ class S3ServiceImplTest: WordSpec() {
                 val compressionService = mock<CompressionService> {
                     on { compress(any(), any()) } doReturn "COMPRESSED_CONTENTS".toByteArray()
                 }
-                val s3Service = S3ServiceImpl(s3AsyncClient,
+                val dataService = DataServiceImpl(s3AsyncClient,
                     s3Client,
                     decryptingS3Client,
                     assumedRoleClientProvider,
@@ -151,9 +152,9 @@ class S3ServiceImplTest: WordSpec() {
 
 
                 val specification = EgressSpecification(SOURCE_BUCKET, SOURCE_PREFIX,
-                    DESTINATION_BUCKET, DESTINATION_PREFIX, TRANSFER_TYPE,
+                    DESTINATION_BUCKET, DESTINATION_PREFIX, S3_TRANSFER_TYPE,
                     decrypt = false, compress = true, "gz", "ROLE_ARN")
-                s3Service.egressObjects(specification)
+                dataService.egressObjects(specification)
                 verify(s3Client, times(100)).getObject(any<GetObjectRequest>())
                 verifyNoMoreInteractions(s3Client)
 
@@ -170,7 +171,141 @@ class S3ServiceImplTest: WordSpec() {
                 verify(compressionService, times(100)).compress(any(), any())
                 verifyNoMoreInteractions(compressionService)
             }
+
+            "write to file not s3" {
+                val objects = objectsSummaries()
+                val objectsWithContents = objectsWithContents()
+                val s3AsyncClient = s3AsyncClient(objects, objectsWithContents)
+                val objectsWithMetadata = objectsWithMetadata()
+
+                val s3Client = mock<S3Client> {
+                    on { getObject(any<GetObjectRequest>()) } doReturnConsecutively objectsWithMetadata
+                }
+
+                val decryptedS3Object = mock<S3ObjectVersion1> {
+                    on { objectContent } doReturn S3ObjectInputStream(ByteArrayInputStream("OBJECT_CONTENT".toByteArray()),
+                        null)
+                }
+                val decryptingS3Client = mock<AmazonS3EncryptionV2> {
+                    on { getObject(any()) } doReturn decryptedS3Object
+                }
+
+                val assumedRoleClient = mock<S3AsyncClient>()
+                val assumedRoleClientProvider: suspend (String) -> S3AsyncClient = { assumedRoleClient }
+                val dataKeyService = mock<DataKeyService> {
+                    on { decryptKey(any(), any()) } doReturn "DECRYPTED_KEY"
+                }
+                val cipherService = mock<CipherService> {
+                    on { decrypt(any(), any(), any()) } doReturn "DECRYPTED_CONTENTS".toByteArray()
+                }
+                val compressionService = mock<CompressionService>()
+
+                val dataService = DataServiceImpl(s3AsyncClient,
+                    s3Client,
+                    decryptingS3Client,
+                    assumedRoleClientProvider,
+                    dataKeyService,
+                    cipherService,
+                    compressionService)
+                val currentDirectory = System.getProperty("user.dir")
+                val testFolderLocation = "/$currentDirectory/sftTest"
+                val specification = EgressSpecification(SOURCE_BUCKET, SOURCE_PREFIX,
+                    DESTINATION_BUCKET, testFolderLocation, SFT_TRANSFER_TYPE,
+                    decrypt = true, compress = false, null, null)
+
+                dataService.egressObjects(specification)
+                verify(s3Client, times(100)).getObject(any<GetObjectRequest>())
+                verifyNoMoreInteractions(s3Client)
+
+                verify(s3AsyncClient, times(1)).listObjectsV2(any<ListObjectsV2Request>())
+                verify(s3AsyncClient, times(67)).getObject(any<GetObjectRequest>(),
+                    any<AsyncResponseTransformer<GetObjectResponse, ResponseBytes<GetObjectResponse>>>())
+
+                verifyNoMoreInteractions(s3AsyncClient)
+                verify(dataKeyService, times(34)).decryptKey(any(), any())
+                verifyNoMoreInteractions(dataKeyService)
+
+                verify(cipherService, times(34)).decrypt(any(), any(), any())
+                verifyNoMoreInteractions(cipherService)
+
+                verify(decryptingS3Client, times(33)).getObject(any())
+                verifyNoMoreInteractions(decryptingS3Client)
+                verifyZeroInteractions(assumedRoleClient)
+                verifyZeroInteractions(compressionService)
+
+
+
+                val file = File(testFolderLocation)
+                val filesCount = getFilesCount(file)
+                assert(filesCount == 100)
+                file.deleteRecursively()
+            }
+
+            "gracefully handle unsupported transfer type" {
+                val objects = objectsSummaries()
+                val objectsWithContents = objectsWithContents()
+                val s3AsyncClient = s3AsyncClient(objects, objectsWithContents)
+                val objectsWithMetadata = objectsWithMetadata()
+
+                val s3Client = mock<S3Client> {
+                    on { getObject(any<GetObjectRequest>()) } doReturnConsecutively objectsWithMetadata
+                }
+
+                val decryptedS3Object = mock<S3ObjectVersion1> {
+                    on { objectContent } doReturn S3ObjectInputStream(ByteArrayInputStream("OBJECT_CONTENT".toByteArray()),
+                        null)
+                }
+                val decryptingS3Client = mock<AmazonS3EncryptionV2> {
+                    on { getObject(any()) } doReturn decryptedS3Object
+                }
+
+                val assumedRoleClient = mock<S3AsyncClient>()
+                val assumedRoleClientProvider: suspend (String) -> S3AsyncClient = { assumedRoleClient }
+                val dataKeyService = mock<DataKeyService> {
+                    on { decryptKey(any(), any()) } doReturn "DECRYPTED_KEY"
+                }
+                val cipherService = mock<CipherService> {
+                    on { decrypt(any(), any(), any()) } doReturn "DECRYPTED_CONTENTS".toByteArray()
+                }
+                val compressionService = mock<CompressionService>()
+
+                val dataService = DataServiceImpl(s3AsyncClient,
+                    s3Client,
+                    decryptingS3Client,
+                    assumedRoleClientProvider,
+                    dataKeyService,
+                    cipherService,
+                    compressionService)
+                val currentDirectory = System.getProperty("user.dir")
+                val testFolderLocation = "/$currentDirectory/sftTest"
+                val specification = EgressSpecification(SOURCE_BUCKET, SOURCE_PREFIX,
+                    DESTINATION_BUCKET, testFolderLocation, "3FT",
+                    decrypt = true, compress = false, null, null)
+
+                dataService.egressObjects(specification)
+                verify(s3Client, times(100)).getObject(any<GetObjectRequest>())
+                verifyNoMoreInteractions(s3Client)
+                verify(s3AsyncClient, times(1)).listObjectsV2(any<ListObjectsV2Request>())
+                verify(s3AsyncClient, times(67)).getObject(any<GetObjectRequest>(),
+                    any<AsyncResponseTransformer<GetObjectResponse, ResponseBytes<GetObjectResponse>>>())
+                verifyNoMoreInteractions(s3AsyncClient)
+                verify(dataKeyService, times(34)).decryptKey(any(), any())
+                verifyNoMoreInteractions(dataKeyService)
+                verify(cipherService, times(34)).decrypt(any(), any(), any())
+                verifyNoMoreInteractions(cipherService)
+                verify(decryptingS3Client, times(33)).getObject(any())
+                verifyNoMoreInteractions(decryptingS3Client)
+                verifyZeroInteractions(assumedRoleClient)
+                verifyZeroInteractions(compressionService)
+            }
         }
+    }
+
+    private fun getFilesCount(file: File): Int {
+        val files = file.listFiles()
+        var count = 0
+        for (f in files) if (f.isDirectory) count += getFilesCount(f) else count++
+        return count
     }
 
     private fun s3AsyncClient(objects: List<S3Object>,
@@ -253,7 +388,8 @@ class S3ServiceImplTest: WordSpec() {
         private const val SOURCE_PREFIX = "SOURCE_PREFIX"
         private const val DESTINATION_BUCKET = "DESTINATION_BUCKET"
         private const val DESTINATION_PREFIX = "DESTINATION_PREFIX"
-        private const val TRANSFER_TYPE = "TRANSFER_TYPE"
+        private const val S3_TRANSFER_TYPE = "S3"
+        private const val SFT_TRANSFER_TYPE = "SFT"
 
 
         private const val ENCRYPTING_KEY_ID_METADATA_KEY = "datakeyencryptionkeyid"
