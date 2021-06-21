@@ -212,7 +212,7 @@ class DataServiceImpl(private val s3AsyncClient: S3AsyncClient,
         }
 
         val file = File(parent, fileName)
-        logger.info("Writing file","file" to "$file", "parent" to "$parent", "filename" to fileName)
+        logger.info("Writing file", "file" to "$file", "parent" to "$parent", "filename" to fileName)
         file.writeBytes(targetContents)
     }
 
@@ -225,4 +225,3 @@ class DataServiceImpl(private val s3AsyncClient: S3AsyncClient,
         private val excludedObjects = listOf("pipeline_success.flag")
     }
 }
-
