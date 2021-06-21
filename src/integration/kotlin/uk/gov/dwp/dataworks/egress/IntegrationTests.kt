@@ -164,15 +164,15 @@ class IntegrationTests: StringSpec() {
                 build()
             }
             s3.putObject(putRequest, AsyncRequestBody.fromString(sourceContents)).await()
-            insertEgressItem("/dataworks-data-egress/sft", "/dataworks-data-egress/sft", SFT_TRANSFER_TYPE)
+            insertEgressItem("/dataworks-data-egress/sft", "/testData/sft", SFT_TRANSFER_TYPE)
             val message = messageBody("/dataworks-data-egress/sft/$PIPELINE_SUCCESS_FLAG")
             val request = sendMessageRequest(message)
             sqs.sendMessage(request).await()
 
             withTimeout(Duration.ofSeconds(TEST_TIMEOUT)) {
-                val testFile = File("/dataworks-data-egress").exists()
+                val testFile = File("/testData").exists()
                 logger.info("Directory exists: '$testFile'")
-                val file = File("/dataworks-data-egress/sft/$identifier.csv")
+                val file = File("/testData/sft/$identifier.csv")
                 while (!file.exists() ) {
                     logger.info("$file doesn't exist")
                     delay(2000)

@@ -32,7 +32,7 @@ services:
       context: .
     container_name: dataworks-data-egress
     volumes:
-      - shared-tmpfs:/dataworks-data-egress
+      - shared-tmpfs:/testData
     environment:
       - AWS_REGION=eu-west-2
       - AWS_SQS_QUEUE_URL=http://localstack:4566/000000000000/integration-queue
@@ -55,7 +55,7 @@ services:
     container_name: dataworks-data-egress-integration-tests
     command: "gradle integration"
     volumes:
-      - shared-tmpfs:/dataworks-data-egress
+      - shared-tmpfs:/testData
     environment:
       - AWS_REGION=eu-west-2
       - SPRING_PROFILES_ACTIVE=LOCALSTACK
