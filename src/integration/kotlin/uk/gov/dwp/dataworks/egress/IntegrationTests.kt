@@ -160,12 +160,12 @@ class IntegrationTests: StringSpec() {
             val sourceContents = sourceContents(identifier)
             val putRequest = with(PutObjectRequest.builder()) {
                 bucket(SOURCE_BUCKET)
-                key("$identifier/${todaysDate()}/$identifier.csv")
+                key("$identifier/SFT/$identifier.csv")
                 build()
             }
             s3.putObject(putRequest, AsyncRequestBody.fromString(sourceContents)).await()
-            insertEgressItem("$identifier/\$TODAYS_DATE", "$identifier/SFT", SFT_TRANSFER_TYPE)
-            val message = messageBody("$identifier/${todaysDate()}/$PIPELINE_SUCCESS_FLAG")
+            insertEgressItem("$identifier/SFT", "$identifier/SFT", SFT_TRANSFER_TYPE)
+            val message = messageBody("$identifier/SFT/$PIPELINE_SUCCESS_FLAG")
             val request = sendMessageRequest(message)
             sqs.sendMessage(request).await()
 
@@ -177,7 +177,7 @@ class IntegrationTests: StringSpec() {
 
                 val filesCount = getFilesCount(file)
                 logger.info("Number of sft files written '$filesCount'")
-                assert(filesCount == 100)
+                assert(filesCount == 1)
             }
         }
     }
