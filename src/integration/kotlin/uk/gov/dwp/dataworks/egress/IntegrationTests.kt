@@ -156,7 +156,7 @@ class IntegrationTests: StringSpec() {
         }
 
         "Should save SFT files to disk" {
-            val identifier = "sftTest"
+            val identifier = "dataworks-data-egress"
             val sourceContents = sourceContents(identifier)
             val putRequest = with(PutObjectRequest.builder()) {
                 bucket(SOURCE_BUCKET)
