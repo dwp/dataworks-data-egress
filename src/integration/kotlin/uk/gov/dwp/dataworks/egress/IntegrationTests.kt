@@ -170,6 +170,7 @@ class IntegrationTests: StringSpec() {
             sqs.sendMessage(request).await()
 
             withTimeout(Duration.ofSeconds(TEST_TIMEOUT)) {
+                delay(5000)
                 val file = File("/$identifier/SFT")
 
                 val fileExists = file.exists()
