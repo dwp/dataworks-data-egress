@@ -21,6 +21,7 @@ import uk.gov.dwp.dataworks.egress.services.DataService
 import uk.gov.dwp.dataworks.logging.DataworksLogger
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.lang.RuntimeException
 import com.amazonaws.services.s3.model.GetObjectRequest as GetObjectRequestVersion1
 
 @Service
@@ -57,7 +58,7 @@ class DataServiceImpl(private val s3AsyncClient: S3AsyncClient,
                 egressClient(specification).putObject(request, AsyncRequestBody.fromBytes(targetContents)).await()
                 true
             } else if (specification.transferType.equals("SFT", true)) {
-                writeToFile(key, specification.destinationPrefix, targetContents)
+                writeToFile(File(key).name, specification.destinationPrefix, targetContents)
                 true
             } else {
             logger.warn("Unsupported transfer type", "specification" to "$specification")
@@ -200,12 +201,18 @@ class DataServiceImpl(private val s3AsyncClient: S3AsyncClient,
         }
 
     private fun writeToFile(fileName: String, folder: String, targetContents: ByteArray ) {
-        if (folder.startsWith("/")){
-            File(folder).mkdirs()
-        } else {
-            File("/$folder").mkdirs()
+        val parent = File(if (folder.startsWith("/")) folder else "/$folder")
+
+        if (!parent.isDirectory) {
+            logger.info("Making parent directory", "parent" to "$parent", "filename" to fileName)
+            if (!parent.mkdirs()) {
+                logger.error("Failed to make parent directories", "parent" to "$parent", "filename" to fileName)
+                throw RuntimeException("Failed to make parent directories, parent: '$parent', filename: '$fileName'")
+            }
         }
-        val file = File("/$folder/$fileName")
+
+        val file = File(parent, fileName)
+        logger.info("Writing file","file" to "$file", "parent" to "$parent", "filename" to fileName)
         file.writeBytes(targetContents)
     }
 

@@ -156,30 +156,29 @@ class IntegrationTests: StringSpec() {
         }
 
         "Should save SFT files to disk" {
-            val identifier = "dataworks-data-egress"
+            val identifier = "sft"
             val sourceContents = sourceContents(identifier)
             val putRequest = with(PutObjectRequest.builder()) {
                 bucket(SOURCE_BUCKET)
-                key("$identifier/SFT/$identifier.csv")
+                key("/dataworks-data-egress/SFT/$identifier.csv")
                 build()
             }
             s3.putObject(putRequest, AsyncRequestBody.fromString(sourceContents)).await()
-            insertEgressItem("$identifier/SFT", "$identifier/SFT", SFT_TRANSFER_TYPE)
-            val message = messageBody("$identifier/SFT/$PIPELINE_SUCCESS_FLAG")
+            insertEgressItem("/dataworks-data-egress/SFT", "/dataworks-data-egress/SFT", SFT_TRANSFER_TYPE)
+            val message = messageBody("/dataworks-data-egress/SFT/$PIPELINE_SUCCESS_FLAG")
             val request = sendMessageRequest(message)
             sqs.sendMessage(request).await()
 
             withTimeout(Duration.ofSeconds(TEST_TIMEOUT)) {
                 val testFile = File("/$identifier").exists()
                 logger.info("Directory exists: '$testFile'")
-                val file = File("/$identifier/SFT")
-                while(! file.exists() ) {
-                    logger.info("Destination file  doesn't exist")
+                val file = File("/dataworks-data-egress/SFT/$identifier.csv")
+                while (!file.exists() ) {
+                    logger.info("$file doesn't exist")
                     delay(2000)
                 }
-                val filesWritten = file.listFiles()
-                logger.info("Number of sft files written '$filesWritten'")
-                assert(filesWritten.size == 1)
+                
+                file.readText() shouldBe sourceContents
             }
         }
     }
