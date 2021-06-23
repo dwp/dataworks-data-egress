@@ -40,6 +40,15 @@ dependencies {
 	implementation("software.amazon.awssdk:sts")
 	implementation("software.amazon.awssdk:s3")
 
+	implementation("io.micrometer:micrometer-core:1.6.4")
+	implementation("io.micrometer:micrometer-registry-prometheus:1.6.4")
+	implementation("io.prometheus:simpleclient:0.10.0")
+	implementation("io.prometheus:simpleclient_caffeine:0.10.0")
+	implementation("io.prometheus:simpleclient_logback:0.10.0")
+	implementation("io.prometheus:simpleclient_pushgateway:0.10.0")
+	implementation("io.prometheus:simpleclient_spring_web:0.10.0")
+	implementation("io.prometheus:simpleclient_httpserver:0.10.0")
+
 	testImplementation("com.nhaarman.mockitokotlin2:mockito-kotlin:2.2.0")
 	testImplementation("io.kotest:kotest-assertions-core-jvm:4.6.0")
 	testImplementation("io.kotest:kotest-assertions-json-jvm:4.6.0")
