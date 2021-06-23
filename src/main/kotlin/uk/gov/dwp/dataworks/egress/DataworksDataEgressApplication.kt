@@ -1,5 +1,6 @@
 package uk.gov.dwp.dataworks.egress
 
+import io.prometheus.client.spring.web.EnablePrometheusTiming
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
@@ -7,19 +8,25 @@ import kotlinx.coroutines.runBlocking
 import org.springframework.boot.CommandLineRunner
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
+import org.springframework.scheduling.annotation.EnableScheduling
 import uk.gov.dwp.dataworks.egress.domain.EgressSpecification
 import uk.gov.dwp.dataworks.egress.services.DbService
 import uk.gov.dwp.dataworks.egress.services.QueueService
 import uk.gov.dwp.dataworks.egress.services.DataService
+import uk.gov.dwp.dataworks.egress.services.MetricsService
 import uk.gov.dwp.dataworks.logging.DataworksLogger
 import java.util.concurrent.atomic.AtomicBoolean
 
 @SpringBootApplication
+@EnableScheduling
+@EnablePrometheusTiming
 class DataworksDataEgressApplication(private val queueService: QueueService,
                                      private val dbService: DbService,
-                                     private val dataService: DataService): CommandLineRunner {
+                                     private val dataService: DataService,
+                                     private val metricsService: MetricsService,): CommandLineRunner {
 
     override fun run(vararg args: String?) {
+        metricsService.startMetricsEndpoint()
         runBlocking {
             while (proceed.get()) {
                 try {
