@@ -12,7 +12,7 @@ import uk.gov.dwp.dataworks.logging.DataworksLogger
 
 @Service
 class PushGatewayServiceImpl(private val pushGateway: PushGateway,
-                             private val applicationName: String,
+                             private val instanceName: String,
                              private val scrapeInterval: Int,
                              private val deleteMetrics: Boolean,
                              private val postProcessor: ScheduledAnnotationBeanPostProcessor): PushGatewayService {

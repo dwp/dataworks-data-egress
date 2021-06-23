@@ -10,7 +10,7 @@ import kotlin.time.ExperimentalTime
 @ExperimentalTime
 class MetricsProperties(var pushgatewayHost: String = "pushgateway",
                         var pushgatewayPort: Int = 9091,
-                        var applicationName: String = "data_egress",
+                        var instanceName: String = "data_egress",
                         var scrapeInterval: Int = 70_000,
                         var deleteMetrics: Boolean = true) {
 
@@ -20,11 +20,8 @@ class MetricsProperties(var pushgatewayHost: String = "pushgateway",
     @Bean
     fun pushgatewayPort() = pushgatewayPort
 
-//    @Bean
-//    fun instanceName() = instanceName
-
     @Bean
-    fun applicationName() = applicationName
+    fun instanceName() = instanceName
 
     @Bean
     fun scrapeInterval() = scrapeInterval
