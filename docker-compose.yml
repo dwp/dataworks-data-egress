@@ -31,6 +31,8 @@ services:
     build:
       context: .
     container_name: dataworks-data-egress
+    depends_on:
+      - pushgateway
     volumes:
       - shared-tmpfs:/testData
     environment:
@@ -59,6 +61,11 @@ services:
     environment:
       - AWS_REGION=eu-west-2
       - SPRING_PROFILES_ACTIVE=LOCALSTACK
+
+  prometheus:
+    build:
+      context: images/prometheus
+    container_name: prometheus
 
   pushgateway:
     image: prom/pushgateway
