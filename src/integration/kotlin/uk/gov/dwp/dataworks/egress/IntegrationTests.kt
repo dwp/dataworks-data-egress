@@ -2,9 +2,17 @@ package uk.gov.dwp.dataworks.egress
 
 import com.amazonaws.services.s3.AmazonS3EncryptionV2
 import com.amazonaws.services.s3.model.ObjectMetadata
+import com.google.gson.JsonElement
+import com.google.gson.JsonObject
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.collections.shouldContainAll
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.ktor.client.*
+import io.ktor.client.features.*
+import io.ktor.client.features.get
+import io.ktor.client.features.json.*
+import io.ktor.client.request.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.time.withTimeout
@@ -142,7 +150,6 @@ class IntegrationTests: StringSpec() {
             verifyEgress(sourceContents, identifier, false, "gz")
         }
 
-
         "Should deflate files if specified" {
             val identifier = "z"
             val sourceContents = sourceContents(identifier)
@@ -180,6 +187,22 @@ class IntegrationTests: StringSpec() {
                 
                 file.readText() shouldBe sourceContents
             }
+        }
+
+        "It should have pushed metrics" {
+            val response = client.get<JsonObject>("http://prometheus:9090/api/v1/targets/metadata")
+            val metricNames = response["data"].asJsonArray
+                .map(JsonElement::getAsJsonObject)
+                .filter { it["target"].asJsonObject["job"].asJsonPrimitive.asString == "pushgateway" }
+                .map { it["metric"].asJsonPrimitive.asString }
+                .filterNot {
+                    it.startsWith("go_") || it.startsWith("process_") ||
+                            it.startsWith("pushgateway_") || it.startsWith("push_")
+                }
+
+            metricNames shouldContainAll listOf(
+                "snapshot_sender_completed_empty_collections"
+            )
         }
     }
 
@@ -333,5 +356,13 @@ class IntegrationTests: StringSpec() {
         private val dataKeyService = applicationContext.getBean(DataKeyService::class.java)
 
         private fun todaysDate() = SimpleDateFormat("yyyy-MM-dd").format(Date())
+
+        val client = HttpClient {
+            install(JsonFeature) {
+                serializer = GsonSerializer {
+                    setPrettyPrinting()
+                }
+            }
+        }
     }
 }

@@ -60,6 +60,12 @@ services:
       - AWS_REGION=eu-west-2
       - SPRING_PROFILES_ACTIVE=LOCALSTACK
 
+  pushgateway:
+    image: prom/pushgateway
+    ports:
+      - "9091:9091"
+    container_name: pushgateway
+
 volumes:
   shared-tmpfs:
     driver: local
