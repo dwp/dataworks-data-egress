@@ -59,7 +59,13 @@ localstack:
 dks:
 	docker-compose up -d dks
 
-services: localstack dks
+pushgateway:
+	docker-compose up -d pushgateway
+
+prometheus:
+	docker-compose up -d prometheus
+
+services: pushgateway prometheus localstack dks
 
 dataworks-data-egress: services
 	docker-compose up -d dataworks-data-egress
