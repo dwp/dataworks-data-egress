@@ -6,6 +6,7 @@ import org.springframework.context.annotation.Import
 import org.springframework.context.annotation.PropertySource
 import uk.gov.dwp.dataworks.egress.configuration.ContextConfiguration
 import uk.gov.dwp.dataworks.egress.configuration.LocalstackConfiguration
+import uk.gov.dwp.dataworks.egress.configuration.MetricsConfiguration
 import uk.gov.dwp.dataworks.egress.properties.AwsProperties
 import uk.gov.dwp.dataworks.egress.properties.SecurityProperties
 import uk.gov.dwp.dataworks.egress.provider.impl.DksEncryptionMaterialsProvider
@@ -20,7 +21,8 @@ import uk.gov.dwp.dataworks.egress.services.impl.DataKeyServiceImpl
     SecureHttpClientProvider::class,
     AwsProperties::class,
     SecurityProperties::class,
-    CipherServiceImpl::class)
+    CipherServiceImpl::class,
+    MetricsConfiguration::class)
 @Configuration
 @PropertySource("classpath:integration.properties")
 class TestConfiguration {
