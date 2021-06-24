@@ -191,15 +191,6 @@ class IntegrationTests: StringSpec() {
 
         "It should have pushed metrics" {
 
-            val identifier = "cse"
-            val sourceContents = sourceContents(identifier)
-            val inputStream = ByteArrayInputStream(sourceContents.toByteArray())
-            val putRequest =
-                PutObjectRequestVersion1(SOURCE_BUCKET, "$identifier/$identifier.csv", inputStream, ObjectMetadata())
-            encryptingS3.putObject(putRequest)
-            verifyEgress(sourceContents, identifier, false)
-
-
             val response = client.get<JsonObject>("http://prometheus:9090/api/v1/targets/metadata")
             logger.info("Response from pushgateway '$response")
             val metricNames = response["data"].asJsonArray

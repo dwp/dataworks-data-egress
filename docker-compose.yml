@@ -36,6 +36,8 @@ services:
     ports:
       - "9091:9091"
     container_name: pushgateway
+    depends_on:
+      - prometheus
 
   dataworks-data-egress:
     image: dataworks-data-egress
