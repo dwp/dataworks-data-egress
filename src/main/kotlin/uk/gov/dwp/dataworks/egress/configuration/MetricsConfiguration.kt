@@ -24,11 +24,6 @@ class MetricsConfiguration(private val pushgatewayHost: String, private val push
     @Bean
     fun sentFilesFailure() = counter("data_egress_s3_files_sent_failure", "Count of s3 files failed to send", "topic")
 
-
-
-
-
-
     private fun gauge(name: String, help: String, vararg labels: String): Gauge =
         with(Gauge.build()) {
             name(name)

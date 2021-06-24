@@ -191,6 +191,7 @@ class IntegrationTests: StringSpec() {
 
         "It should have pushed metrics" {
 
+            delay(50000)
             val response = client.get<JsonObject>("http://prometheus:9090/api/v1/targets/metadata")
             logger.info("Response from pushgateway '$response")
             val metricNames = response["data"].asJsonArray
