@@ -190,6 +190,16 @@ class IntegrationTests: StringSpec() {
         }
 
         "It should have pushed metrics" {
+
+            val identifier = "cse"
+            val sourceContents = sourceContents(identifier)
+            val inputStream = ByteArrayInputStream(sourceContents.toByteArray())
+            val putRequest =
+                PutObjectRequestVersion1(SOURCE_BUCKET, "$identifier/$identifier.csv", inputStream, ObjectMetadata())
+            encryptingS3.putObject(putRequest)
+            verifyEgress(sourceContents, identifier, false)
+
+
             val response = client.get<JsonObject>("http://prometheus:9090/api/v1/targets/metadata")
             val metricNames = response["data"].asJsonArray
                 .map(JsonElement::getAsJsonObject)
@@ -201,7 +211,7 @@ class IntegrationTests: StringSpec() {
                 }
 
             metricNames shouldContainAll listOf(
-                "snapshot_sender_completed_empty_collections"
+                "data_egress_s3_files_sent_success"
             )
         }
     }
