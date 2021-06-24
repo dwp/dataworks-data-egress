@@ -1,9 +1,8 @@
 package uk.gov.dwp.dataworks.egress.configuration
 
 import com.amazonaws.ClientConfiguration
-import com.amazonaws.auth.DefaultAWSCredentialsProviderChain
-import com.amazonaws.regions.Regions
-import com.amazonaws.services.s3.*
+import com.amazonaws.services.s3.AmazonS3EncryptionClientV2
+import com.amazonaws.services.s3.AmazonS3EncryptionV2
 import com.amazonaws.services.s3.model.CryptoConfigurationV2
 import com.amazonaws.services.s3.model.CryptoMode
 import com.amazonaws.services.s3.model.EncryptionMaterialsProvider
@@ -23,7 +22,7 @@ class AwsConfiguration(private val encryptionMaterialsProvider: EncryptionMateri
 
     @Bean
     fun decryptingS3Client(): AmazonS3EncryptionV2 =
-        with (AmazonS3EncryptionClientV2.encryptionBuilder()) {
+        with(AmazonS3EncryptionClientV2.encryptionBuilder()) {
             withPathStyleAccessEnabled(true)
             withEncryptionMaterialsProvider(encryptionMaterialsProvider)
             withCryptoConfiguration(CryptoConfigurationV2().withCryptoMode(CryptoMode.AuthenticatedEncryption))
@@ -35,7 +34,7 @@ class AwsConfiguration(private val encryptionMaterialsProvider: EncryptionMateri
 
     @Bean
     fun s3Client(): S3Client =
-        with (S3Client.builder()) {
+        with(S3Client.builder()) {
             overrideConfiguration(timeoutConfiguration())
             build()
         }
@@ -43,7 +42,7 @@ class AwsConfiguration(private val encryptionMaterialsProvider: EncryptionMateri
 
     @Bean
     fun s3AsyncClient(): S3AsyncClient =
-        with (S3AsyncClient.builder()) {
+        with(S3AsyncClient.builder()) {
             overrideConfiguration(timeoutConfiguration())
             build()
         }
