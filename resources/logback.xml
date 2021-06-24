@@ -9,6 +9,8 @@
         </layout>
     </appender>
 
+    <appender name="METRICS" class="io.prometheus.client.logback.InstrumentedAppender" />
+
     <root level="${LOG_LEVEL}">
         <appender-ref ref="CONSOLE"/>
     </root>
