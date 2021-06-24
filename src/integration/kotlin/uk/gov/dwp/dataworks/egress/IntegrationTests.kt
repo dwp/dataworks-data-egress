@@ -53,141 +53,141 @@ class IntegrationTests: StringSpec() {
 
     init {
 
-//        "Should process client-side-encrypted encrypted files" {
-//            val identifier = "cse"
-//            val sourceContents = sourceContents(identifier)
-//            val inputStream = ByteArrayInputStream(sourceContents.toByteArray())
-//            val putRequest =
-//                PutObjectRequestVersion1(SOURCE_BUCKET, "$identifier/$identifier.csv", inputStream, ObjectMetadata())
-//            encryptingS3.putObject(putRequest)
-//            verifyEgress(sourceContents, identifier, false)
-//        }
-//
-//        "Should decrypt htme encrypted files if requested" {
-//            val identifier = "htme"
-//            val sourceContents = sourceContents(identifier)
-//            val (encryptingKeyId, plaintextDataKey, ciphertextDataKey) = dataKeyService.batchDataKey()
-//            val (iv, encrypted) = cipherService.encrypt(plaintextDataKey, sourceContents.toByteArray())
-//            val putRequest = with(PutObjectRequest.builder()) {
-//                bucket(SOURCE_BUCKET)
-//                key("$identifier/$identifier.csv.enc")
-//                metadata(mapOf(ENCRYPTING_KEY_ID_METADATA_KEY to encryptingKeyId,
-//                    INITIALISATION_VECTOR_METADATA_KEY to iv,
-//                    CIPHERTEXT_METADATA_KEY to ciphertextDataKey))
-//                build()
-//            }
-//            s3.putObject(putRequest, AsyncRequestBody.fromBytes(encrypted)).await()
-//            verifyEgress(sourceContents, identifier, true)
-//        }
-//
-//        "Should not decrypt htme encrypted files if not requested" {
-//            val identifier = "htme_put_encrypted"
-//            val sourceContents = sourceContents(identifier)
-//            val (encryptingKeyId, plaintext, ciphertext) = dataKeyService.batchDataKey()
-//            val (iv, encrypted) = cipherService.encrypt(plaintext, sourceContents.toByteArray())
-//            val putRequest = with(PutObjectRequest.builder()) {
-//                bucket(SOURCE_BUCKET)
-//                key("$identifier/$identifier.csv.enc")
-//                metadata(mapOf(ENCRYPTING_KEY_ID_METADATA_KEY to encryptingKeyId,
-//                    INITIALISATION_VECTOR_METADATA_KEY to iv,
-//                    CIPHERTEXT_METADATA_KEY to ciphertext))
-//                build()
-//            }
-//            s3.putObject(putRequest, AsyncRequestBody.fromBytes(encrypted)).await()
-//            insertEgressItem("$identifier/", "$identifier/", TRANSFER_TYPE, false)
-//            val message = messageBody("$identifier/$PIPELINE_SUCCESS_FLAG")
-//            val request = sendMessageRequest(message)
-//            sqs.sendMessage(request).await()
-//            withTimeout(Duration.ofSeconds(TEST_TIMEOUT)) {
-//                val metadata = egressedMetadata(DESTINATION_BUCKET, "$identifier/$identifier.csv.enc")
-//                val encryptingKeyIdFromMetadata = metadata[ENCRYPTING_KEY_ID_METADATA_KEY]
-//                val ivFromMetadata = metadata[INITIALISATION_VECTOR_METADATA_KEY]
-//                val ciphertextFromMetadata = metadata[CIPHERTEXT_METADATA_KEY]
-//                encryptingKeyIdFromMetadata.shouldNotBeNull()
-//                ivFromMetadata.shouldNotBeNull()
-//                ciphertextFromMetadata.shouldNotBeNull()
-//                encryptingKeyIdFromMetadata shouldBe encryptingKeyId
-//                ivFromMetadata shouldBe iv
-//                ciphertextFromMetadata shouldBe ciphertext
-//                val plaintextFromMetadata =
-//                    dataKeyService.decryptKey(encryptingKeyIdFromMetadata, ciphertextFromMetadata)
-//                plaintextFromMetadata shouldBe plaintext
-//                val targetContents = egressedContents(DESTINATION_BUCKET, "$identifier/$identifier.csv.enc")
-//                val decrypted = cipherService.decrypt(plaintextFromMetadata, ivFromMetadata, targetContents)
-//                String(decrypted) shouldBe sourceContents
-//            }
-//        }
-//
-//        "Should process files with today's date in prefix" {
-//            val identifier = "today"
-//            val sourceContents = sourceContents(identifier)
-//            val putRequest = with(PutObjectRequest.builder()) {
-//                bucket(SOURCE_BUCKET)
-//                key("$identifier/${todaysDate()}/$identifier.csv")
-//                build()
-//            }
-//            s3.putObject(putRequest, AsyncRequestBody.fromString(sourceContents)).await()
-//            insertEgressItem("$identifier/\$TODAYS_DATE", "$identifier/\$TODAYS_DATE", TRANSFER_TYPE)
-//            val message = messageBody("$identifier/${todaysDate()}/$PIPELINE_SUCCESS_FLAG")
-//            val request = sendMessageRequest(message)
-//            sqs.sendMessage(request).await()
-//
-//            withTimeout(Duration.ofSeconds(TEST_TIMEOUT)) {
-//                val targetContents = egressedContents(DESTINATION_BUCKET, "$identifier/${todaysDate()}/$identifier.csv")
-//                String(targetContents) shouldBe sourceContents
-//            }
-//        }
-//
-//        "Should gz compress files if specified" {
-//            val identifier = "gz"
-//            val sourceContents = sourceContents(identifier)
-//            val putRequest = with(PutObjectRequest.builder()) {
-//                bucket(SOURCE_BUCKET)
-//                key("$identifier/$identifier.csv")
-//                build()
-//            }
-//            s3.putObject(putRequest, AsyncRequestBody.fromBytes(sourceContents.toByteArray())).await()
-//            verifyEgress(sourceContents, identifier, false, "gz")
-//        }
-//
-//        "Should deflate files if specified" {
-//            val identifier = "z"
-//            val sourceContents = sourceContents(identifier)
-//            val putRequest = with(PutObjectRequest.builder()) {
-//                bucket(SOURCE_BUCKET)
-//                key("$identifier/$identifier.csv")
-//                build()
-//            }
-//            s3.putObject(putRequest, AsyncRequestBody.fromBytes(sourceContents.toByteArray())).await()
-//            verifyEgress(sourceContents, identifier, false, "z")
-//        }
-//
-//        "Should save SFT files to disk" {
-//            val identifier = "sft"
-//            val sourceContents = sourceContents(identifier)
-//            val putRequest = with(PutObjectRequest.builder()) {
-//                bucket(SOURCE_BUCKET)
-//                key("/dataworks-data-egress/sft/$identifier.csv")
-//                build()
-//            }
-//            s3.putObject(putRequest, AsyncRequestBody.fromString(sourceContents)).await()
-//            insertEgressItem("/dataworks-data-egress/sft", "/testData/sft", SFT_TRANSFER_TYPE)
-//            val message = messageBody("/dataworks-data-egress/sft/$PIPELINE_SUCCESS_FLAG")
-//            val request = sendMessageRequest(message)
-//            sqs.sendMessage(request).await()
-//
-//            withTimeout(Duration.ofSeconds(TEST_TIMEOUT)) {
-//                val testFile = File("/testData").exists()
-//                logger.info("Directory exists: '$testFile'")
-//                val file = File("/testData/sft/$identifier.csv")
-//                while (!file.exists() ) {
-//                    logger.info("$file doesn't exist")
-//                    delay(2000)
-//                }
-//
-//                file.readText() shouldBe sourceContents
-//            }
-//        }
+        "Should process client-side-encrypted encrypted files" {
+            val identifier = "cse"
+            val sourceContents = sourceContents(identifier)
+            val inputStream = ByteArrayInputStream(sourceContents.toByteArray())
+            val putRequest =
+                PutObjectRequestVersion1(SOURCE_BUCKET, "$identifier/$identifier.csv", inputStream, ObjectMetadata())
+            encryptingS3.putObject(putRequest)
+            verifyEgress(sourceContents, identifier, false)
+        }
+
+        "Should decrypt htme encrypted files if requested" {
+            val identifier = "htme"
+            val sourceContents = sourceContents(identifier)
+            val (encryptingKeyId, plaintextDataKey, ciphertextDataKey) = dataKeyService.batchDataKey()
+            val (iv, encrypted) = cipherService.encrypt(plaintextDataKey, sourceContents.toByteArray())
+            val putRequest = with(PutObjectRequest.builder()) {
+                bucket(SOURCE_BUCKET)
+                key("$identifier/$identifier.csv.enc")
+                metadata(mapOf(ENCRYPTING_KEY_ID_METADATA_KEY to encryptingKeyId,
+                    INITIALISATION_VECTOR_METADATA_KEY to iv,
+                    CIPHERTEXT_METADATA_KEY to ciphertextDataKey))
+                build()
+            }
+            s3.putObject(putRequest, AsyncRequestBody.fromBytes(encrypted)).await()
+            verifyEgress(sourceContents, identifier, true)
+        }
+
+        "Should not decrypt htme encrypted files if not requested" {
+            val identifier = "htme_put_encrypted"
+            val sourceContents = sourceContents(identifier)
+            val (encryptingKeyId, plaintext, ciphertext) = dataKeyService.batchDataKey()
+            val (iv, encrypted) = cipherService.encrypt(plaintext, sourceContents.toByteArray())
+            val putRequest = with(PutObjectRequest.builder()) {
+                bucket(SOURCE_BUCKET)
+                key("$identifier/$identifier.csv.enc")
+                metadata(mapOf(ENCRYPTING_KEY_ID_METADATA_KEY to encryptingKeyId,
+                    INITIALISATION_VECTOR_METADATA_KEY to iv,
+                    CIPHERTEXT_METADATA_KEY to ciphertext))
+                build()
+            }
+            s3.putObject(putRequest, AsyncRequestBody.fromBytes(encrypted)).await()
+            insertEgressItem("$identifier/", "$identifier/", TRANSFER_TYPE, false)
+            val message = messageBody("$identifier/$PIPELINE_SUCCESS_FLAG")
+            val request = sendMessageRequest(message)
+            sqs.sendMessage(request).await()
+            withTimeout(Duration.ofSeconds(TEST_TIMEOUT)) {
+                val metadata = egressedMetadata(DESTINATION_BUCKET, "$identifier/$identifier.csv.enc")
+                val encryptingKeyIdFromMetadata = metadata[ENCRYPTING_KEY_ID_METADATA_KEY]
+                val ivFromMetadata = metadata[INITIALISATION_VECTOR_METADATA_KEY]
+                val ciphertextFromMetadata = metadata[CIPHERTEXT_METADATA_KEY]
+                encryptingKeyIdFromMetadata.shouldNotBeNull()
+                ivFromMetadata.shouldNotBeNull()
+                ciphertextFromMetadata.shouldNotBeNull()
+                encryptingKeyIdFromMetadata shouldBe encryptingKeyId
+                ivFromMetadata shouldBe iv
+                ciphertextFromMetadata shouldBe ciphertext
+                val plaintextFromMetadata =
+                    dataKeyService.decryptKey(encryptingKeyIdFromMetadata, ciphertextFromMetadata)
+                plaintextFromMetadata shouldBe plaintext
+                val targetContents = egressedContents(DESTINATION_BUCKET, "$identifier/$identifier.csv.enc")
+                val decrypted = cipherService.decrypt(plaintextFromMetadata, ivFromMetadata, targetContents)
+                String(decrypted) shouldBe sourceContents
+            }
+        }
+
+        "Should process files with today's date in prefix" {
+            val identifier = "today"
+            val sourceContents = sourceContents(identifier)
+            val putRequest = with(PutObjectRequest.builder()) {
+                bucket(SOURCE_BUCKET)
+                key("$identifier/${todaysDate()}/$identifier.csv")
+                build()
+            }
+            s3.putObject(putRequest, AsyncRequestBody.fromString(sourceContents)).await()
+            insertEgressItem("$identifier/\$TODAYS_DATE", "$identifier/\$TODAYS_DATE", TRANSFER_TYPE)
+            val message = messageBody("$identifier/${todaysDate()}/$PIPELINE_SUCCESS_FLAG")
+            val request = sendMessageRequest(message)
+            sqs.sendMessage(request).await()
+
+            withTimeout(Duration.ofSeconds(TEST_TIMEOUT)) {
+                val targetContents = egressedContents(DESTINATION_BUCKET, "$identifier/${todaysDate()}/$identifier.csv")
+                String(targetContents) shouldBe sourceContents
+            }
+        }
+
+        "Should gz compress files if specified" {
+            val identifier = "gz"
+            val sourceContents = sourceContents(identifier)
+            val putRequest = with(PutObjectRequest.builder()) {
+                bucket(SOURCE_BUCKET)
+                key("$identifier/$identifier.csv")
+                build()
+            }
+            s3.putObject(putRequest, AsyncRequestBody.fromBytes(sourceContents.toByteArray())).await()
+            verifyEgress(sourceContents, identifier, false, "gz")
+        }
+
+        "Should deflate files if specified" {
+            val identifier = "z"
+            val sourceContents = sourceContents(identifier)
+            val putRequest = with(PutObjectRequest.builder()) {
+                bucket(SOURCE_BUCKET)
+                key("$identifier/$identifier.csv")
+                build()
+            }
+            s3.putObject(putRequest, AsyncRequestBody.fromBytes(sourceContents.toByteArray())).await()
+            verifyEgress(sourceContents, identifier, false, "z")
+        }
+
+        "Should save SFT files to disk" {
+            val identifier = "sft"
+            val sourceContents = sourceContents(identifier)
+            val putRequest = with(PutObjectRequest.builder()) {
+                bucket(SOURCE_BUCKET)
+                key("/dataworks-data-egress/sft/$identifier.csv")
+                build()
+            }
+            s3.putObject(putRequest, AsyncRequestBody.fromString(sourceContents)).await()
+            insertEgressItem("/dataworks-data-egress/sft", "/testData/sft", SFT_TRANSFER_TYPE)
+            val message = messageBody("/dataworks-data-egress/sft/$PIPELINE_SUCCESS_FLAG")
+            val request = sendMessageRequest(message)
+            sqs.sendMessage(request).await()
+
+            withTimeout(Duration.ofSeconds(TEST_TIMEOUT)) {
+                val testFile = File("/testData").exists()
+                logger.info("Directory exists: '$testFile'")
+                val file = File("/testData/sft/$identifier.csv")
+                while (!file.exists() ) {
+                    logger.info("$file doesn't exist")
+                    delay(2000)
+                }
+
+                file.readText() shouldBe sourceContents
+            }
+        }
 
         "It should have pushed metrics" {
 
