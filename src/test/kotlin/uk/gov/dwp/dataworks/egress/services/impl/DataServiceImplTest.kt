@@ -3,7 +3,11 @@ package uk.gov.dwp.dataworks.egress.services.impl
 import com.amazonaws.services.s3.AmazonS3EncryptionV2
 import com.amazonaws.services.s3.model.S3ObjectInputStream
 import com.nhaarman.mockitokotlin2.*
+import io.kotest.core.spec.style.AnnotationSpec
 import io.kotest.core.spec.style.WordSpec
+import io.prometheus.client.Counter
+import org.aspectj.lang.annotation.Before
+import org.springframework.boot.test.mock.mockito.MockBean
 import software.amazon.awssdk.core.ResponseBytes
 import software.amazon.awssdk.core.ResponseInputStream
 import software.amazon.awssdk.core.async.AsyncRequestBody
@@ -16,12 +20,22 @@ import uk.gov.dwp.dataworks.egress.domain.EgressSpecification
 import uk.gov.dwp.dataworks.egress.services.CipherService
 import uk.gov.dwp.dataworks.egress.services.CompressionService
 import uk.gov.dwp.dataworks.egress.services.DataKeyService
+import uk.gov.dwp.dataworks.egress.services.MetricsService
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.util.concurrent.CompletableFuture
 import com.amazonaws.services.s3.model.S3Object as S3ObjectVersion1
 
-class DataServiceImplTest: WordSpec() {
+import org.junit.jupiter.api.BeforeAll
+
+class DataServiceImplTest : WordSpec() {
+
+    @MockBean(name = "sentFilesSuccess")
+    private var sentFilesSuccess: Counter = mock()
+
+    @MockBean(name = "sentFilesFailure")
+    private var sentFilesFailure: Counter = mock()
+
     init {
         "dataService" should {
             "decrypt" {
@@ -35,8 +49,10 @@ class DataServiceImplTest: WordSpec() {
                 }
 
                 val decryptedS3Object = mock<S3ObjectVersion1> {
-                    on { objectContent } doReturn S3ObjectInputStream(ByteArrayInputStream("OBJECT_CONTENT".toByteArray()),
-                        null)
+                    on { objectContent } doReturn S3ObjectInputStream(
+                        ByteArrayInputStream("OBJECT_CONTENT".toByteArray()),
+                        null
+                    )
                 }
                 val decryptingS3Client = mock<AmazonS3EncryptionV2> {
                     on { getObject(any()) } doReturn decryptedS3Object
@@ -51,27 +67,38 @@ class DataServiceImplTest: WordSpec() {
                     on { decrypt(any(), any(), any()) } doReturn "DECRYPTED_CONTENTS".toByteArray()
                 }
                 val compressionService = mock<CompressionService>()
+                reset(sentFilesSuccess)
+                reset(sentFilesFailure)
 
-                val dataService = DataServiceImpl(s3AsyncClient,
+
+                val dataService = DataServiceImpl(
+                    s3AsyncClient,
                     s3Client,
                     decryptingS3Client,
                     assumedRoleClientProvider,
                     dataKeyService,
                     cipherService,
-                    compressionService)
+                    compressionService,
+                    sentFilesSuccess,
+                    sentFilesFailure
+                )
 
 
-                val specification = EgressSpecification(SOURCE_BUCKET, SOURCE_PREFIX,
+                val specification = EgressSpecification(
+                    SOURCE_BUCKET, SOURCE_PREFIX,
                     DESTINATION_BUCKET, DESTINATION_PREFIX, S3_TRANSFER_TYPE,
-                    decrypt = true, compress = false, null, null)
+                    decrypt = true, compress = false, null, null
+                )
 
                 dataService.egressObjects(specification)
                 verify(s3Client, times(100)).getObject(any<GetObjectRequest>())
                 verifyNoMoreInteractions(s3Client)
 
                 verify(s3AsyncClient, times(1)).listObjectsV2(any<ListObjectsV2Request>())
-                verify(s3AsyncClient, times(67)).getObject(any<GetObjectRequest>(),
-                    any<AsyncResponseTransformer<GetObjectResponse, ResponseBytes<GetObjectResponse>>>())
+                verify(s3AsyncClient, times(67)).getObject(
+                    any<GetObjectRequest>(),
+                    any<AsyncResponseTransformer<GetObjectResponse, ResponseBytes<GetObjectResponse>>>()
+                )
 
                 verify(s3AsyncClient, times(100)).putObject(any<PutObjectRequest>(), any<AsyncRequestBody>())
                 verifyNoMoreInteractions(s3AsyncClient)
@@ -85,6 +112,9 @@ class DataServiceImplTest: WordSpec() {
                 verifyNoMoreInteractions(decryptingS3Client)
                 verifyZeroInteractions(assumedRoleClient)
                 verifyZeroInteractions(compressionService)
+
+                verify(sentFilesSuccess, times(100)).inc()
+                verifyZeroInteractions(sentFilesFailure)
             }
 
             "assume role, not decrypt, compress" {
@@ -97,9 +127,13 @@ class DataServiceImplTest: WordSpec() {
 
                 val objectsWithContents = List(100) { index ->
                     val resp = with(GetObjectResponse.builder()) {
-                        metadata(mapOf(ENCRYPTING_KEY_ID_METADATA_KEY to ENCRYPTING_KEY_ID_METADATA_VALUE,
-                            INITIALISATION_VECTOR_METADATA_KEY to INITIALISATION_VECTOR_METADATA_VALUE,
-                            CIPHERTEXT_METADATA_KEY to CIPHERTEXT_METADATA_VALUE))
+                        metadata(
+                            mapOf(
+                                ENCRYPTING_KEY_ID_METADATA_KEY to ENCRYPTING_KEY_ID_METADATA_VALUE,
+                                INITIALISATION_VECTOR_METADATA_KEY to INITIALISATION_VECTOR_METADATA_VALUE,
+                                CIPHERTEXT_METADATA_KEY to CIPHERTEXT_METADATA_VALUE
+                            )
+                        )
                         build()
                     }
                     ResponseBytes.fromByteArray(resp, "OBJECT_BODY_$index".toByteArray())
@@ -111,8 +145,10 @@ class DataServiceImplTest: WordSpec() {
                     } doReturn CompletableFuture.completedFuture(listObjectsResponse)
 
                     on {
-                        getObject(any<GetObjectRequest>(),
-                            any<AsyncResponseTransformer<GetObjectResponse, ResponseBytes<GetObjectResponse>>>())
+                        getObject(
+                            any<GetObjectRequest>(),
+                            any<AsyncResponseTransformer<GetObjectResponse, ResponseBytes<GetObjectResponse>>>()
+                        )
                     } doReturnConsecutively objectsWithContents
                 }
 
@@ -142,25 +178,35 @@ class DataServiceImplTest: WordSpec() {
                 val compressionService = mock<CompressionService> {
                     on { compress(any(), any()) } doReturn "COMPRESSED_CONTENTS".toByteArray()
                 }
-                val dataService = DataServiceImpl(s3AsyncClient,
+                reset(sentFilesSuccess)
+                reset(sentFilesFailure)
+                val dataService = DataServiceImpl(
+                    s3AsyncClient,
                     s3Client,
                     decryptingS3Client,
                     assumedRoleClientProvider,
                     dataKeyService,
                     cipherService,
-                    compressionService)
+                    compressionService,
+                    sentFilesSuccess,
+                    sentFilesFailure
+                )
 
 
-                val specification = EgressSpecification(SOURCE_BUCKET, SOURCE_PREFIX,
+                val specification = EgressSpecification(
+                    SOURCE_BUCKET, SOURCE_PREFIX,
                     DESTINATION_BUCKET, DESTINATION_PREFIX, S3_TRANSFER_TYPE,
-                    decrypt = false, compress = true, "gz", "ROLE_ARN")
+                    decrypt = false, compress = true, "gz", "ROLE_ARN"
+                )
                 dataService.egressObjects(specification)
                 verify(s3Client, times(100)).getObject(any<GetObjectRequest>())
                 verifyNoMoreInteractions(s3Client)
 
                 verify(s3AsyncClient, times(1)).listObjectsV2(any<ListObjectsV2Request>())
-                verify(s3AsyncClient, times(100)).getObject(any<GetObjectRequest>(),
-                    any<AsyncResponseTransformer<GetObjectResponse, ResponseBytes<GetObjectResponse>>>())
+                verify(s3AsyncClient, times(100)).getObject(
+                    any<GetObjectRequest>(),
+                    any<AsyncResponseTransformer<GetObjectResponse, ResponseBytes<GetObjectResponse>>>()
+                )
 
                 verifyNoMoreInteractions(s3AsyncClient)
                 verifyZeroInteractions(dataKeyService)
@@ -170,6 +216,9 @@ class DataServiceImplTest: WordSpec() {
                 verifyNoMoreInteractions(assumedRoleClient)
                 verify(compressionService, times(100)).compress(any(), any())
                 verifyNoMoreInteractions(compressionService)
+
+                verify(sentFilesSuccess, times(100)).inc()
+                verifyZeroInteractions(sentFilesFailure)
             }
 
             "write to file not s3" {
@@ -183,8 +232,10 @@ class DataServiceImplTest: WordSpec() {
                 }
 
                 val decryptedS3Object = mock<S3ObjectVersion1> {
-                    on { objectContent } doReturn S3ObjectInputStream(ByteArrayInputStream("OBJECT_CONTENT".toByteArray()),
-                        null)
+                    on { objectContent } doReturn S3ObjectInputStream(
+                        ByteArrayInputStream("OBJECT_CONTENT".toByteArray()),
+                        null
+                    )
                 }
                 val decryptingS3Client = mock<AmazonS3EncryptionV2> {
                     on { getObject(any()) } doReturn decryptedS3Object
@@ -200,26 +251,37 @@ class DataServiceImplTest: WordSpec() {
                 }
                 val compressionService = mock<CompressionService>()
 
-                val dataService = DataServiceImpl(s3AsyncClient,
+                reset(sentFilesSuccess)
+                reset(sentFilesFailure)
+
+                val dataService = DataServiceImpl(
+                    s3AsyncClient,
                     s3Client,
                     decryptingS3Client,
                     assumedRoleClientProvider,
                     dataKeyService,
                     cipherService,
-                    compressionService)
+                    compressionService,
+                    sentFilesSuccess,
+                    sentFilesFailure
+                )
                 val currentDirectory = System.getProperty("user.dir")
                 val testFolderLocation = "/$currentDirectory/sftTest"
-                val specification = EgressSpecification(SOURCE_BUCKET, SOURCE_PREFIX,
+                val specification = EgressSpecification(
+                    SOURCE_BUCKET, SOURCE_PREFIX,
                     DESTINATION_BUCKET, testFolderLocation, SFT_TRANSFER_TYPE,
-                    decrypt = true, compress = false, null, null)
+                    decrypt = true, compress = false, null, null
+                )
 
                 dataService.egressObjects(specification)
                 verify(s3Client, times(100)).getObject(any<GetObjectRequest>())
                 verifyNoMoreInteractions(s3Client)
 
                 verify(s3AsyncClient, times(1)).listObjectsV2(any<ListObjectsV2Request>())
-                verify(s3AsyncClient, times(67)).getObject(any<GetObjectRequest>(),
-                    any<AsyncResponseTransformer<GetObjectResponse, ResponseBytes<GetObjectResponse>>>())
+                verify(s3AsyncClient, times(67)).getObject(
+                    any<GetObjectRequest>(),
+                    any<AsyncResponseTransformer<GetObjectResponse, ResponseBytes<GetObjectResponse>>>()
+                )
 
                 verifyNoMoreInteractions(s3AsyncClient)
                 verify(dataKeyService, times(34)).decryptKey(any(), any())
@@ -234,11 +296,13 @@ class DataServiceImplTest: WordSpec() {
                 verifyZeroInteractions(compressionService)
 
 
-
                 val file = File(testFolderLocation)
                 val filesCount = getFilesCount(file)
                 assert(filesCount == 100)
                 file.deleteRecursively()
+
+                verifyZeroInteractions(sentFilesSuccess)
+                verifyZeroInteractions(sentFilesFailure)
             }
 
             "gracefully handle unsupported transfer type" {
@@ -252,8 +316,10 @@ class DataServiceImplTest: WordSpec() {
                 }
 
                 val decryptedS3Object = mock<S3ObjectVersion1> {
-                    on { objectContent } doReturn S3ObjectInputStream(ByteArrayInputStream("OBJECT_CONTENT".toByteArray()),
-                        null)
+                    on { objectContent } doReturn S3ObjectInputStream(
+                        ByteArrayInputStream("OBJECT_CONTENT".toByteArray()),
+                        null
+                    )
                 }
                 val decryptingS3Client = mock<AmazonS3EncryptionV2> {
                     on { getObject(any()) } doReturn decryptedS3Object
@@ -269,25 +335,33 @@ class DataServiceImplTest: WordSpec() {
                 }
                 val compressionService = mock<CompressionService>()
 
-                val dataService = DataServiceImpl(s3AsyncClient,
+                val dataService = DataServiceImpl(
+                    s3AsyncClient,
                     s3Client,
                     decryptingS3Client,
                     assumedRoleClientProvider,
                     dataKeyService,
                     cipherService,
-                    compressionService)
+                    compressionService,
+                    sentFilesSuccess,
+                    sentFilesFailure
+                )
                 val currentDirectory = System.getProperty("user.dir")
                 val testFolderLocation = "/$currentDirectory/sftTest"
-                val specification = EgressSpecification(SOURCE_BUCKET, SOURCE_PREFIX,
+                val specification = EgressSpecification(
+                    SOURCE_BUCKET, SOURCE_PREFIX,
                     DESTINATION_BUCKET, testFolderLocation, "3FT",
-                    decrypt = true, compress = false, null, null)
+                    decrypt = true, compress = false, null, null
+                )
 
                 dataService.egressObjects(specification)
                 verify(s3Client, times(100)).getObject(any<GetObjectRequest>())
                 verifyNoMoreInteractions(s3Client)
                 verify(s3AsyncClient, times(1)).listObjectsV2(any<ListObjectsV2Request>())
-                verify(s3AsyncClient, times(67)).getObject(any<GetObjectRequest>(),
-                    any<AsyncResponseTransformer<GetObjectResponse, ResponseBytes<GetObjectResponse>>>())
+                verify(s3AsyncClient, times(67)).getObject(
+                    any<GetObjectRequest>(),
+                    any<AsyncResponseTransformer<GetObjectResponse, ResponseBytes<GetObjectResponse>>>()
+                )
                 verifyNoMoreInteractions(s3AsyncClient)
                 verify(dataKeyService, times(34)).decryptKey(any(), any())
                 verifyNoMoreInteractions(dataKeyService)
@@ -308,8 +382,10 @@ class DataServiceImplTest: WordSpec() {
         return count
     }
 
-    private fun s3AsyncClient(objects: List<S3Object>,
-                              objectsWithContents: List<CompletableFuture<ResponseBytes<GetObjectResponse>>>): S3AsyncClient =
+    private fun s3AsyncClient(
+        objects: List<S3Object>,
+        objectsWithContents: List<CompletableFuture<ResponseBytes<GetObjectResponse>>>
+    ): S3AsyncClient =
         mock {
             on {
                 listObjectsV2(any<ListObjectsV2Request>())
@@ -319,8 +395,10 @@ class DataServiceImplTest: WordSpec() {
             })
 
             on {
-                getObject(any<GetObjectRequest>(),
-                    any<AsyncResponseTransformer<GetObjectResponse, ResponseBytes<GetObjectResponse>>>())
+                getObject(
+                    any<GetObjectRequest>(),
+                    any<AsyncResponseTransformer<GetObjectResponse, ResponseBytes<GetObjectResponse>>>()
+                )
             } doReturnConsecutively objectsWithContents
 
             on {
@@ -334,9 +412,11 @@ class DataServiceImplTest: WordSpec() {
                 metadata(
                     when (index % 3) {
                         0 -> {
-                            mapOf(ENCRYPTING_KEY_ID_METADATA_KEY to ENCRYPTING_KEY_ID_METADATA_VALUE,
+                            mapOf(
+                                ENCRYPTING_KEY_ID_METADATA_KEY to ENCRYPTING_KEY_ID_METADATA_VALUE,
                                 INITIALISATION_VECTOR_METADATA_KEY to INITIALISATION_VECTOR_METADATA_VALUE,
-                                CIPHERTEXT_METADATA_KEY to CIPHERTEXT_METADATA_VALUE)
+                                CIPHERTEXT_METADATA_KEY to CIPHERTEXT_METADATA_VALUE
+                            )
                         }
                         1 -> {
                             mapOf(MATERIALS_DESCRIPTION_METADATA_KEY to "MATERIALS_DESCRIPTION")
@@ -366,9 +446,11 @@ class DataServiceImplTest: WordSpec() {
                 metadata(
                     when (index % 2) {
                         0 -> {
-                            mapOf(ENCRYPTING_KEY_ID_METADATA_KEY to ENCRYPTING_KEY_ID_METADATA_VALUE,
+                            mapOf(
+                                ENCRYPTING_KEY_ID_METADATA_KEY to ENCRYPTING_KEY_ID_METADATA_VALUE,
                                 INITIALISATION_VECTOR_METADATA_KEY to INITIALISATION_VECTOR_METADATA_VALUE,
-                                CIPHERTEXT_METADATA_KEY to CIPHERTEXT_METADATA_VALUE)
+                                CIPHERTEXT_METADATA_KEY to CIPHERTEXT_METADATA_VALUE
+                            )
                         }
                         1 -> {
                             mapOf(MATERIALS_DESCRIPTION_METADATA_KEY to "MATERIALS_DESCRIPTION")
