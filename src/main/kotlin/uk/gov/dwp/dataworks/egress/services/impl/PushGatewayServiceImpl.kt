@@ -39,7 +39,7 @@ class PushGatewayServiceImpl(private val pushGateway: PushGateway,
     override fun deleteMetrics() {
         logger.info("Waiting for metric collection before deletion",
             "scrape_interval" to "$scrapeInterval", *metricsGroupingKeyPairs())
-        pushGateway.delete("ucfs-claimant-kafka-consumer", metricsGroupingKey())
+        pushGateway.delete("data-egress", metricsGroupingKey())
         logger.info("Deleted metrics", "scrape_interval" to "$scrapeInterval", *metricsGroupingKeyPairs())
     }
 
