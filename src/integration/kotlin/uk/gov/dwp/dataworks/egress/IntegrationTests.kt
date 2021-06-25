@@ -193,7 +193,7 @@ class IntegrationTests: StringSpec() {
 
             delay(50000)
             val response = client.get<JsonObject>("http://prometheus:9090/api/v1/targets/metadata")
-            logger.info("Response from pushgateway '$response")
+            logger.info("Response from prometheus '$response")
             val metricNames = response["data"].asJsonArray
                 .map(JsonElement::getAsJsonObject)
                 .filter { it["target"].asJsonObject["job"].asJsonPrimitive.asString == "pushgateway" }

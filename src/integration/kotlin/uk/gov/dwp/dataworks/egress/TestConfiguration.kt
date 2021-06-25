@@ -58,5 +58,5 @@ class TestConfiguration {
     fun pushgatewayPort() = 9091
 
     @Bean
-    fun pushgatewayHost() = "pushgatewayHost"
+    fun pushgatewayHost() = "pushgateway"
 }
