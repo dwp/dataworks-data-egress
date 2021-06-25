@@ -190,7 +190,6 @@ class IntegrationTests: StringSpec() {
         }
 
         "It should have pushed metrics" {
-
             delay(50000)
             val response = client.get<JsonObject>("http://prometheus:9090/api/v1/targets/metadata")
             logger.info("Response from prometheus '$response")
@@ -203,9 +202,7 @@ class IntegrationTests: StringSpec() {
                             it.startsWith("pushgateway_") || it.startsWith("push_")
                 }
 
-            metricNames shouldContainAll listOf(
-                "data_egress_s3_files_sent_success"
-            )
+            metricNames shouldContainAll listOf("data_egress_s3_files_sent_success_total", "data_egress_s3_files_sent_failure_total")
         }
     }
 
