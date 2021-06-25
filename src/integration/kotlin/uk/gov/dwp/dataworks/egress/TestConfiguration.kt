@@ -53,4 +53,10 @@ class TestConfiguration {
 
     @Bean
     fun cipherTransformation() = "AES/CTR/NoPadding"
+
+    @Bean
+    fun pushgatewayPort() = 9091
+
+    @Bean
+    fun pushgatewayHost() = "pushgatewayHost"
 }
