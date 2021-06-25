@@ -9,9 +9,9 @@ import kotlin.time.ExperimentalTime
 @ConfigurationProperties(prefix = "metrics")
 @ExperimentalTime
 class MetricsProperties(var pushgatewayHost: String = "pushgateway",
-                        var pushgatewayPort: Int = 9090,
+                        var pushgatewayPort: Int = 9091,
                         var instanceName: String = "data_egress",
-                        var scrapeInterval: Int = 70_000,
+                        var scrapeInterval: Int = 70000,
                         var deleteMetrics: Boolean = true) {
 
     @Bean
