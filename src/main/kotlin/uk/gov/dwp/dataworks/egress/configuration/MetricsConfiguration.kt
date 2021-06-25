@@ -20,11 +20,11 @@ class MetricsConfiguration(private val pushgatewayHost: String, private val push
 
     @Bean
     fun sentFilesSuccess() =
-        counter("data_egress_s3_files_sent_success", "Count of sent s3 files sent successfully")
+        counter("data_egress_files_sent_success", "Count of sent files sent successfully", "source_prefix", "pipeline_name", "destination_prefix", "recipient",  "transfer_type")
 
     @Bean
     fun sentFilesFailure() =
-        counter("data_egress_s3_files_sent_failure", "Count of s3 files failed to send")
+        counter("data_egress_files_sent_failure", "Count of files which failed to send", "source_prefix", "pipeline_name", "destination_prefix", "recipient",  "transfer_type")
 
     private fun gauge(name: String, help: String, vararg labels: String): Gauge =
         with(Gauge.build()) {
