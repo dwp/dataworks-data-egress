@@ -9,10 +9,7 @@ import software.amazon.awssdk.core.async.AsyncRequestBody
 import software.amazon.awssdk.core.async.AsyncResponseTransformer
 import software.amazon.awssdk.services.s3.S3AsyncClient
 import software.amazon.awssdk.services.s3.S3Client
-import software.amazon.awssdk.services.s3.model.GetObjectRequest
-import software.amazon.awssdk.services.s3.model.ListObjectsV2Request
-import software.amazon.awssdk.services.s3.model.PutObjectRequest
-import software.amazon.awssdk.services.s3.model.S3Object
+import software.amazon.awssdk.services.s3.model.*
 import uk.gov.dwp.dataworks.egress.domain.EgressSpecification
 import uk.gov.dwp.dataworks.egress.services.CipherService
 import uk.gov.dwp.dataworks.egress.services.CompressionService
@@ -82,6 +79,7 @@ class DataServiceImpl(private val s3AsyncClient: S3AsyncClient,
                                  key: String): PutObjectRequest =
         with(PutObjectRequest.builder()) {
             bucket(specification.destinationBucket)
+            serverSideEncryption(ServerSideEncryption.AWS_KMS)
             key(targetKey(specification, key))
             build()
         }
@@ -91,6 +89,7 @@ class DataServiceImpl(private val s3AsyncClient: S3AsyncClient,
         with(PutObjectRequest.builder()) {
             bucket(specification.destinationBucket)
             key(targetKey(specification, key))
+            serverSideEncryption(ServerSideEncryption.AWS_KMS)
             metadata(mapOf(INITIALISATION_VECTOR_METADATA_KEY to metadata[INITIALISATION_VECTOR_METADATA_KEY],
                 ENCRYPTING_KEY_ID_METADATA_KEY to metadata[ENCRYPTING_KEY_ID_METADATA_KEY],
                 CIPHERTEXT_METADATA_KEY to metadata[CIPHERTEXT_METADATA_KEY]))
