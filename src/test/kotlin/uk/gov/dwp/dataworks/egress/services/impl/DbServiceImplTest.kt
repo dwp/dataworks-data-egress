@@ -12,7 +12,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.CompletableFuture
 
-class DbServiceImplTest: WordSpec() {
+class DbServiceImplTest : WordSpec() {
     init {
         "DbService" should {
 
@@ -87,7 +87,17 @@ class DbServiceImplTest: WordSpec() {
     }
 
     private fun egressSpecification(matchingPrefix: String) = EgressSpecification(
-        SOURCE_BUCKET, matchingPrefix, DESTINATION_BUCKET, DESTINATION_PREFIX, TRANSFER_TYPE, false, false, null, null, PIPELINE_NAME, RECIPIENT
+        SOURCE_BUCKET,
+        matchingPrefix,
+        DESTINATION_BUCKET,
+        DESTINATION_PREFIX,
+        TRANSFER_TYPE,
+        false,
+        false,
+        null,
+        null,
+        PIPELINE_NAME,
+        RECIPIENT
 
 
     )
@@ -97,7 +107,10 @@ class DbServiceImplTest: WordSpec() {
         DESTINATION_PREFIX_KEY to attributeValue(DESTINATION_PREFIX),
         SOURCE_BUCKET_KEY to attributeValue(SOURCE_BUCKET),
         DESTINATION_BUCKET_KEY to attributeValue(DESTINATION_BUCKET),
-        TRANSFER_TYPE_KEY to attributeValue(TRANSFER_TYPE)).toMutableMap()
+        TRANSFER_TYPE_KEY to attributeValue(TRANSFER_TYPE),
+        PIPELINE_NAME_KEY to attributeValue(PIPELINE_NAME),
+        RECIPIENT_KEY to attributeValue(RECIPIENT)
+    ).toMutableMap()
 
 
     companion object {
@@ -111,13 +124,15 @@ class DbServiceImplTest: WordSpec() {
         private const val DESTINATION_PREFIX_KEY: String = "destination_prefix"
         private const val TRANSFER_TYPE_KEY: String = "transfer_type"
         private const val TODAYS_DATE_PLACEHOLDER = "\$TODAYS_DATE"
-        private const val PIPELINE_NAME = "PIPELINE_NAME"
-        private const val RECIPIENT = "RECIPIENT"
+        private const val PIPELINE_NAME_KEY = "pipeline_name"
+        private const val RECIPIENT_KEY = "recipient_name"
 
         private const val SOURCE_BUCKET = "source"
         private const val DESTINATION_BUCKET = "destination"
         private const val TRANSFER_TYPE = "S3"
         private const val DESTINATION_PREFIX = "destination/prefix"
         private const val LAST_EVALUATED_KEY = "LAST_EVALUATED_KEY"
+        private const val PIPELINE_NAME = "pipeline"
+        private const val RECIPIENT = "recipient"
     }
 }
