@@ -40,12 +40,24 @@ dependencies {
 	implementation("software.amazon.awssdk:sts")
 	implementation("software.amazon.awssdk:s3")
 
+	implementation("io.micrometer:micrometer-core:1.6.4")
+	implementation("io.micrometer:micrometer-registry-prometheus:1.6.4")
+	implementation("io.prometheus:simpleclient:0.10.0")
+	implementation("io.prometheus:simpleclient_caffeine:0.10.0")
+	implementation("io.prometheus:simpleclient_logback:0.10.0")
+	implementation("io.prometheus:simpleclient_pushgateway:0.10.0")
+	implementation("io.prometheus:simpleclient_spring_web:0.10.0")
+	implementation("io.prometheus:simpleclient_httpserver:0.10.0")
+
 	testImplementation("com.nhaarman.mockitokotlin2:mockito-kotlin:2.2.0")
 	testImplementation("io.kotest:kotest-assertions-core-jvm:4.6.0")
 	testImplementation("io.kotest:kotest-assertions-json-jvm:4.6.0")
 	testImplementation("io.kotest:kotest-property-jvm:4.6.0")
 	testImplementation("io.kotest:kotest-runner-junit5-jvm:4.6.0")
 	testImplementation("io.kotest:kotest-extensions-spring:4.4.3")
+	testImplementation("io.ktor:ktor-client-core:1.5.1")
+	testImplementation("io.ktor:ktor-client-gson:1.5.1")
+	testImplementation("io.ktor:ktor-client-apache:1.5.1")
 	testImplementation("org.springframework.boot:spring-boot-starter-test") {
 		exclude(group = "org.junit.vintage", module = "junit-vintage-engine")
 	}

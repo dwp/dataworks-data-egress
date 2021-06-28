@@ -6,13 +6,17 @@ import org.springframework.context.annotation.Import
 import org.springframework.context.annotation.PropertySource
 import uk.gov.dwp.dataworks.egress.configuration.ContextConfiguration
 import uk.gov.dwp.dataworks.egress.configuration.LocalstackConfiguration
+import uk.gov.dwp.dataworks.egress.configuration.MetricsConfiguration
 import uk.gov.dwp.dataworks.egress.properties.AwsProperties
+import uk.gov.dwp.dataworks.egress.properties.MetricsProperties
 import uk.gov.dwp.dataworks.egress.properties.SecurityProperties
 import uk.gov.dwp.dataworks.egress.provider.impl.DksEncryptionMaterialsProvider
 import uk.gov.dwp.dataworks.egress.provider.impl.SecureHttpClientProvider
 import uk.gov.dwp.dataworks.egress.services.impl.CipherServiceImpl
 import uk.gov.dwp.dataworks.egress.services.impl.DataKeyServiceImpl
+import kotlin.time.ExperimentalTime
 
+@ExperimentalTime
 @Import(LocalstackConfiguration::class,
     ContextConfiguration::class,
     DksEncryptionMaterialsProvider::class,
@@ -20,7 +24,9 @@ import uk.gov.dwp.dataworks.egress.services.impl.DataKeyServiceImpl
     SecureHttpClientProvider::class,
     AwsProperties::class,
     SecurityProperties::class,
-    CipherServiceImpl::class)
+    CipherServiceImpl::class,
+    MetricsProperties::class,
+    MetricsConfiguration::class)
 @Configuration
 @PropertySource("classpath:integration.properties")
 class TestConfiguration {
@@ -47,4 +53,10 @@ class TestConfiguration {
 
     @Bean
     fun cipherTransformation() = "AES/CTR/NoPadding"
+
+    @Bean
+    fun pushgatewayPort() = 9091
+
+    @Bean
+    fun pushgatewayHost() = "pushgateway"
 }

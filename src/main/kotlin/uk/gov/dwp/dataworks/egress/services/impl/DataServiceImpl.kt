@@ -1,6 +1,7 @@
 package uk.gov.dwp.dataworks.egress.services.impl
 
 import com.amazonaws.services.s3.AmazonS3EncryptionV2
+import io.prometheus.client.Counter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.withContext
@@ -28,7 +29,9 @@ class DataServiceImpl(private val s3AsyncClient: S3AsyncClient,
                       private val assumedRoleS3ClientProvider: suspend (String) -> S3AsyncClient,
                       private val dataKeyService: DataKeyService,
                       private val cipherService: CipherService,
-                      private val compressionService: CompressionService): DataService {
+                      private val compressionService: CompressionService,
+                      private val sentFilesSuccess: Counter,
+                      private val sentFilesFailure: Counter): DataService {
 
     override suspend fun egressObjects(specifications: List<EgressSpecification>): Boolean =
         specifications.map { specification -> egressObjects(specification) }.all { it }
@@ -53,9 +56,13 @@ class DataServiceImpl(private val s3AsyncClient: S3AsyncClient,
                     putObjectRequest(specification, key)
                 }
                 egressClient(specification).putObject(request, AsyncRequestBody.fromBytes(targetContents)).await()
+                sentFilesSuccess.labels(specification.sourcePrefix, specification.pipelineName, specification.destinationPrefix, specification.recipient, specification.transferType)
+                sentFilesSuccess.inc()
                 true
             } else if (specification.transferType.equals("SFT", true)) {
                 writeToFile(File(key).name, specification.destinationPrefix, targetContents)
+                sentFilesSuccess.labels(specification.sourcePrefix, specification.pipelineName, specification.destinationPrefix, specification.recipient, specification.transferType)
+                sentFilesSuccess.inc()
                 true
             } else {
                 logger.warn("Unsupported transfer type", "specification" to "$specification")
@@ -63,6 +70,8 @@ class DataServiceImpl(private val s3AsyncClient: S3AsyncClient,
             }
         } catch (e: Exception) {
             logger.error("Failed to egress object", e, "key" to key, "specification" to "$specification")
+            sentFilesFailure.labels(specification.sourcePrefix, specification.pipelineName, specification.destinationPrefix, specification.recipient, specification.transferType)
+            sentFilesFailure.inc()
             false
         }
 

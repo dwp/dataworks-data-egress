@@ -36,7 +36,11 @@ class DbServiceImpl(private val dynamoDb: DynamoDbAsyncClient,
             decrypt = dynamoDbRecord[DECRYPT_COLUMN]?.bool() ?: false,
             compress = dynamoDbRecord[COMPRESS_COLUMN]?.bool() ?: false,
             compressionFormat = dynamoDbRecord[COMPRESSION_FORMAT_COLUMN]?.s(),
-            roleArn = dynamoDbRecord[ROLE_ARN_COLUMN]?.s())
+            roleArn = dynamoDbRecord[ROLE_ARN_COLUMN]?.s(),
+            pipelineName = attributeStringValue(dynamoDbRecord, PIPELINE_COLUMN),
+            recipient = attributeStringValue(dynamoDbRecord, RECIPIENT_COLUMN)
+        )
+
 
     private suspend fun entries(): Flow<List<Map<String, AttributeValue>>> =
         flow { entriesEmitter(this) }
@@ -76,5 +80,7 @@ class DbServiceImpl(private val dynamoDb: DynamoDbAsyncClient,
         private const val COMPRESSION_FORMAT_COLUMN: String = "compress_fmt"
         private const val ROLE_ARN_COLUMN: String = "role_arn"
         private const val TODAYS_DATE_PLACEHOLDER = "\$TODAYS_DATE"
+        private const val PIPELINE_COLUMN = "pipeline_name"
+        private const val RECIPIENT_COLUMN = "recipient_name"
     }
 }

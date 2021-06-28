@@ -26,11 +26,26 @@ services:
       context: images/dks
     container_name: dks
 
+  prometheus:
+    build:
+      context: images/prometheus
+    container_name: prometheus
+
+  pushgateway:
+    image: prom/pushgateway
+    ports:
+      - "9091:9091"
+    container_name: pushgateway
+    depends_on:
+      - prometheus
+
   dataworks-data-egress:
     image: dataworks-data-egress
     build:
       context: .
     container_name: dataworks-data-egress
+    depends_on:
+      - pushgateway
     volumes:
       - shared-tmpfs:/testData
     environment:
@@ -59,6 +74,7 @@ services:
     environment:
       - AWS_REGION=eu-west-2
       - SPRING_PROFILES_ACTIVE=LOCALSTACK
+
 
 volumes:
   shared-tmpfs:

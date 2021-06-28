@@ -2,9 +2,17 @@ package uk.gov.dwp.dataworks.egress
 
 import com.amazonaws.services.s3.AmazonS3EncryptionV2
 import com.amazonaws.services.s3.model.ObjectMetadata
+import com.google.gson.JsonElement
+import com.google.gson.JsonObject
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.collections.shouldContainAll
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.ktor.client.*
+import io.ktor.client.features.*
+import io.ktor.client.features.get
+import io.ktor.client.features.json.*
+import io.ktor.client.request.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.time.withTimeout
@@ -142,7 +150,6 @@ class IntegrationTests: StringSpec() {
             verifyEgress(sourceContents, identifier, false, "gz")
         }
 
-
         "Should deflate files if specified" {
             val identifier = "z"
             val sourceContents = sourceContents(identifier)
@@ -177,9 +184,24 @@ class IntegrationTests: StringSpec() {
                     logger.info("$file doesn't exist")
                     delay(2000)
                 }
-                
+
                 file.readText() shouldBe sourceContents
             }
+        }
+
+        "It should have pushed metrics" {
+            val response = client.get<JsonObject>("http://prometheus:9090/api/v1/targets/metadata")
+            logger.info("Response from prometheus '$response")
+            val metricNames = response["data"].asJsonArray
+                .map(JsonElement::getAsJsonObject)
+                .filter { it["target"].asJsonObject["job"].asJsonPrimitive.asString == "pushgateway" }
+                .map { it["metric"].asJsonPrimitive.asString }
+                .filterNot {
+                    it.startsWith("go_") || it.startsWith("process_") ||
+                            it.startsWith("pushgateway_") || it.startsWith("push_")
+                }
+
+            metricNames shouldContainAll listOf("data_egress_s3_files_sent_success_total", "data_egress_s3_files_sent_failure_total")
         }
     }
 
@@ -269,6 +291,7 @@ class IntegrationTests: StringSpec() {
             egressColumn(SOURCE_BUCKET_FIELD_NAME, SOURCE_BUCKET),
             egressColumn(DESTINATION_BUCKET_FIELD_NAME, DESTINATION_BUCKET),
             egressColumn(PIPELINE_FIELD_NAME, PIPELINE_NAME),
+            egressColumn(RECIPIENT_FIELD_NAME, RECIPIENT),
             egressColumn(SOURCE_PREFIX_FIELD_NAME, sourcePrefix),
             egressColumn(DESTINATION_PREFIX_FIELD_NAME, destinationPrefix),
             egressColumn(TRANSFER_TYPE_FIELD_NAME, transferType))
@@ -306,6 +329,7 @@ class IntegrationTests: StringSpec() {
         private const val DESTINATION_BUCKET = "destination"
         private const val TRANSFER_TYPE = "S3"
         private const val SFT_TRANSFER_TYPE = "SFT"
+        private const val RECIPIENT = "recipient"
 
         private const val ENCRYPTING_KEY_ID_METADATA_KEY = "datakeyencryptionkeyid"
         private const val INITIALISATION_VECTOR_METADATA_KEY = "iv"
@@ -314,6 +338,7 @@ class IntegrationTests: StringSpec() {
         private const val SOURCE_BUCKET_FIELD_NAME = "source_bucket"
         private const val DESTINATION_BUCKET_FIELD_NAME = "destination_bucket"
         private const val PIPELINE_FIELD_NAME = "pipeline_name"
+        private const val RECIPIENT_FIELD_NAME = "recipient_name"
         private const val SOURCE_PREFIX_FIELD_NAME = "source_prefix"
         private const val DESTINATION_PREFIX_FIELD_NAME = "destination_prefix"
         private const val TRANSFER_TYPE_FIELD_NAME = "transfer_type"
@@ -333,5 +358,13 @@ class IntegrationTests: StringSpec() {
         private val dataKeyService = applicationContext.getBean(DataKeyService::class.java)
 
         private fun todaysDate() = SimpleDateFormat("yyyy-MM-dd").format(Date())
+
+        val client = HttpClient {
+            install(JsonFeature) {
+                serializer = GsonSerializer {
+                    setPrettyPrinting()
+                }
+            }
+        }
     }
 }
