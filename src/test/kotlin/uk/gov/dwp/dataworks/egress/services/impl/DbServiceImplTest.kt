@@ -87,7 +87,9 @@ class DbServiceImplTest: WordSpec() {
     }
 
     private fun egressSpecification(matchingPrefix: String) = EgressSpecification(
-        SOURCE_BUCKET, matchingPrefix, DESTINATION_BUCKET, DESTINATION_PREFIX, TRANSFER_TYPE, false, false, null, null
+        SOURCE_BUCKET, matchingPrefix, DESTINATION_BUCKET, DESTINATION_PREFIX, TRANSFER_TYPE, false, false, null, null, PIPELINE_NAME, RECIPIENT
+
+
     )
 
     private fun egressTableItem(matchingPrefix: String) = mapOf(
@@ -109,6 +111,8 @@ class DbServiceImplTest: WordSpec() {
         private const val DESTINATION_PREFIX_KEY: String = "destination_prefix"
         private const val TRANSFER_TYPE_KEY: String = "transfer_type"
         private const val TODAYS_DATE_PLACEHOLDER = "\$TODAYS_DATE"
+        private const val PIPELINE_NAME = "PIPELINE_NAME"
+        private const val RECIPIENT = "RECIPIENT"
 
         private const val SOURCE_BUCKET = "source"
         private const val DESTINATION_BUCKET = "destination"

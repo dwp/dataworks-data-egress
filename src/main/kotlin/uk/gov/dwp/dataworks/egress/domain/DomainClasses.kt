@@ -8,7 +8,9 @@ data class EgressSpecification(val sourceBucket: String,
                                val decrypt: Boolean = false,
                                val compress: Boolean = false,
                                val compressionFormat: String?,
-                               val roleArn: String?)
+                               val roleArn: String?,
+                               val pipelineName: String,
+                               val recipient: String)
 
 data class DataKeyResult(val dataKeyEncryptionKeyId: String, val plaintextDataKey: String, val ciphertextDataKey: String)
 

@@ -87,7 +87,8 @@ class DataServiceImplTest : WordSpec() {
                 val specification = EgressSpecification(
                     SOURCE_BUCKET, SOURCE_PREFIX,
                     DESTINATION_BUCKET, DESTINATION_PREFIX, S3_TRANSFER_TYPE,
-                    decrypt = true, compress = false, null, null
+                    decrypt = true, compress = false, null, null,
+                    PIPELINE_NAME, RECIPIENT
                 )
 
                 dataService.egressObjects(specification)
@@ -196,7 +197,8 @@ class DataServiceImplTest : WordSpec() {
                 val specification = EgressSpecification(
                     SOURCE_BUCKET, SOURCE_PREFIX,
                     DESTINATION_BUCKET, DESTINATION_PREFIX, S3_TRANSFER_TYPE,
-                    decrypt = false, compress = true, "gz", "ROLE_ARN"
+                    decrypt = false, compress = true, "gz", "ROLE_ARN",
+                    PIPELINE_NAME, RECIPIENT
                 )
                 dataService.egressObjects(specification)
                 verify(s3Client, times(100)).getObject(any<GetObjectRequest>())
@@ -270,7 +272,8 @@ class DataServiceImplTest : WordSpec() {
                 val specification = EgressSpecification(
                     SOURCE_BUCKET, SOURCE_PREFIX,
                     DESTINATION_BUCKET, testFolderLocation, SFT_TRANSFER_TYPE,
-                    decrypt = true, compress = false, null, null
+                    decrypt = true, compress = false, null, null,
+                    PIPELINE_NAME, RECIPIENT
                 )
 
                 dataService.egressObjects(specification)
@@ -351,7 +354,8 @@ class DataServiceImplTest : WordSpec() {
                 val specification = EgressSpecification(
                     SOURCE_BUCKET, SOURCE_PREFIX,
                     DESTINATION_BUCKET, testFolderLocation, "3FT",
-                    decrypt = true, compress = false, null, null
+                    decrypt = true, compress = false, null, null,
+                    PIPELINE_NAME, RECIPIENT
                 )
 
                 dataService.egressObjects(specification)
@@ -472,6 +476,8 @@ class DataServiceImplTest : WordSpec() {
         private const val DESTINATION_PREFIX = "DESTINATION_PREFIX"
         private const val S3_TRANSFER_TYPE = "S3"
         private const val SFT_TRANSFER_TYPE = "SFT"
+        private const val PIPELINE_NAME = "PIPELINE_NAME"
+        private const val RECIPIENT = "RECIPIENT"
 
 
         private const val ENCRYPTING_KEY_ID_METADATA_KEY = "datakeyencryptionkeyid"

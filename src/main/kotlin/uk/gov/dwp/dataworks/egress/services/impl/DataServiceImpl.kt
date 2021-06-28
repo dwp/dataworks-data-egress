@@ -59,10 +59,13 @@ class DataServiceImpl(private val s3AsyncClient: S3AsyncClient,
                     putObjectRequest(specification, key)
                 }
                 egressClient(specification).putObject(request, AsyncRequestBody.fromBytes(targetContents)).await()
+                sentFilesSuccess.labels(specification.sourcePrefix, specification.pipelineName, specification.destinationPrefix, specification.recipient, specification.transferType)
                 sentFilesSuccess.inc()
                 true
             } else if (specification.transferType.equals("SFT", true)) {
                 writeToFile(File(key).name, specification.destinationPrefix, targetContents)
+                sentFilesSuccess.labels(specification.sourcePrefix, specification.pipelineName, specification.destinationPrefix, specification.recipient, specification.transferType)
+                sentFilesSuccess.inc()
                 true
             } else {
                 logger.warn("Unsupported transfer type", "specification" to "$specification")
@@ -70,6 +73,7 @@ class DataServiceImpl(private val s3AsyncClient: S3AsyncClient,
             }
         } catch (e: Exception) {
             logger.error("Failed to egress object", e, "key" to key, "specification" to "$specification")
+            sentFilesFailure.labels(specification.sourcePrefix, specification.pipelineName, specification.destinationPrefix, specification.recipient, specification.transferType)
             sentFilesFailure.inc()
             false
         }
