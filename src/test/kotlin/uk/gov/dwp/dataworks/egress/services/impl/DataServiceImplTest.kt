@@ -426,7 +426,7 @@ class DataServiceImplTest : WordSpec() {
                 )
                 val specification = EgressSpecification(
                     SOURCE_BUCKET, SOURCE_PREFIX,
-                    DESTINATION_BUCKET, "/failTest", "SFT",
+                    DESTINATION_BUCKET, "//failTest", "SFT",
                     decrypt = true, compress = false, null, null,
                     PIPELINE_NAME, RECIPIENT
                 )
