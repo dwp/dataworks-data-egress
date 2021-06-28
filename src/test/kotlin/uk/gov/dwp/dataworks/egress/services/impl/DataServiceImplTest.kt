@@ -304,7 +304,7 @@ class DataServiceImplTest : WordSpec() {
                 assert(filesCount == 100)
                 file.deleteRecursively()
 
-                verifyZeroInteractions(sentFilesSuccess)
+                verify(sentFilesSuccess, times(100)).inc()
                 verifyZeroInteractions(sentFilesFailure)
             }
 
