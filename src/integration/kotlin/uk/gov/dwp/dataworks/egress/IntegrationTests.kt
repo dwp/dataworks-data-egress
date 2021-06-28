@@ -10,7 +10,6 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.ktor.client.*
 import io.ktor.client.features.*
-import io.ktor.client.features.get
 import io.ktor.client.features.json.*
 import io.ktor.client.request.*
 import kotlinx.coroutines.delay
@@ -37,12 +36,12 @@ import uk.gov.dwp.dataworks.egress.services.DataKeyService
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.nio.file.Files
 import java.text.SimpleDateFormat
 import java.time.Duration
 import java.util.*
 import java.util.zip.GZIPInputStream
 import java.util.zip.Inflater
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
 import com.amazonaws.services.s3.model.PutObjectRequest as PutObjectRequestVersion1
 
@@ -180,7 +179,7 @@ class IntegrationTests: StringSpec() {
                 val testFile = File("/testData").exists()
                 logger.info("Directory exists: '$testFile'")
                 val file = File("/testData/sft/$identifier.csv")
-                while (!file.exists() ) {
+                while (!file.exists()) {
                     logger.info("$file doesn't exist")
                     delay(2000)
                 }
@@ -190,19 +189,29 @@ class IntegrationTests: StringSpec() {
         }
 
         "It should have pushed metrics" {
-            val response = client.get<JsonObject>("http://prometheus:9090/api/v1/targets/metadata")
-            logger.info("Response from prometheus '$response")
-            val metricNames = response["data"].asJsonArray
-                .map(JsonElement::getAsJsonObject)
-                .filter { it["target"].asJsonObject["job"].asJsonPrimitive.asString == "pushgateway" }
-                .map { it["metric"].asJsonPrimitive.asString }
-                .filterNot {
-                    it.startsWith("go_") || it.startsWith("process_") ||
-                            it.startsWith("pushgateway_") || it.startsWith("push_")
-                }
-
-            metricNames shouldContainAll listOf("data_egress_s3_files_sent_success_total", "data_egress_s3_files_sent_failure_total")
+            val metricNames = withTimeout(Duration.ofSeconds(TEST_TIMEOUT)) { egressMetrics() }
+            metricNames shouldContainAll listOf("data_egress_files_sent_success_total",
+                "data_egress_files_sent_failure_total")
         }
+    }
+
+    private tailrec suspend fun egressMetrics(): List<String> {
+        val response = client.get<JsonObject>("http://prometheus:9090/api/v1/targets/metadata")
+        logger.info("Response from prometheus '$response")
+        val egressMetrics: List<String> = response["data"].asJsonArray
+            .map(JsonElement::getAsJsonObject)
+            .filter { it["target"].asJsonObject["job"].asJsonPrimitive.asString == "pushgateway" }
+            .map { it["metric"].asJsonPrimitive.asString }
+            .filterNot {
+                it.startsWith("go_") || it.startsWith("process_") ||
+                        it.startsWith("pushgateway_") || it.startsWith("push_")
+            }
+
+        if (egressMetrics.isNotEmpty()) {
+            return egressMetrics
+        }
+        delay(3_000)
+        return egressMetrics()
     }
 
     private suspend fun verifyEgress(sourceContents: String,

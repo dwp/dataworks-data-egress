@@ -71,7 +71,7 @@ dataworks-data-egress: services
 	docker-compose up -d dataworks-data-egress
 
 integration-tests: dataworks-data-egress
-	docker-compose up dataworks-data-egress-integration-tests
+	docker-compose run dataworks-data-egress-integration-tests
 
 ecr:
 	aws ecr get-login-password --region $(aws_region) --profile dataworks-management-dev | docker login --username AWS --password-stdin $(aws_mgmt_dev_account).dkr.ecr.$(aws_region).amazonaws.com
