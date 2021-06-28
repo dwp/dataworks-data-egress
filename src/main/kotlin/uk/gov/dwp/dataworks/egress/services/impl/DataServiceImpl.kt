@@ -89,6 +89,7 @@ class DataServiceImpl(private val s3AsyncClient: S3AsyncClient,
         with(PutObjectRequest.builder()) {
             bucket(specification.destinationBucket)
             serverSideEncryption(ServerSideEncryption.AWS_KMS)
+            acl(ObjectCannedACL.BUCKET_OWNER_FULL_CONTROL)
             key(targetKey(specification, key))
             build()
         }
@@ -98,6 +99,7 @@ class DataServiceImpl(private val s3AsyncClient: S3AsyncClient,
         with(PutObjectRequest.builder()) {
             bucket(specification.destinationBucket)
             key(targetKey(specification, key))
+            acl(ObjectCannedACL.BUCKET_OWNER_FULL_CONTROL)
             serverSideEncryption(ServerSideEncryption.AWS_KMS)
             metadata(mapOf(INITIALISATION_VECTOR_METADATA_KEY to metadata[INITIALISATION_VECTOR_METADATA_KEY],
                 ENCRYPTING_KEY_ID_METADATA_KEY to metadata[ENCRYPTING_KEY_ID_METADATA_KEY],
