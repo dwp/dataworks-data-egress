@@ -291,6 +291,7 @@ class IntegrationTests: StringSpec() {
             egressColumn(SOURCE_BUCKET_FIELD_NAME, SOURCE_BUCKET),
             egressColumn(DESTINATION_BUCKET_FIELD_NAME, DESTINATION_BUCKET),
             egressColumn(PIPELINE_FIELD_NAME, PIPELINE_NAME),
+            egressColumn(RECIPIENT_FIELD_NAME, RECIPIENT),
             egressColumn(SOURCE_PREFIX_FIELD_NAME, sourcePrefix),
             egressColumn(DESTINATION_PREFIX_FIELD_NAME, destinationPrefix),
             egressColumn(TRANSFER_TYPE_FIELD_NAME, transferType))
@@ -328,6 +329,7 @@ class IntegrationTests: StringSpec() {
         private const val DESTINATION_BUCKET = "destination"
         private const val TRANSFER_TYPE = "S3"
         private const val SFT_TRANSFER_TYPE = "SFT"
+        private const val RECIPIENT = "recipient"
 
         private const val ENCRYPTING_KEY_ID_METADATA_KEY = "datakeyencryptionkeyid"
         private const val INITIALISATION_VECTOR_METADATA_KEY = "iv"
@@ -336,6 +338,7 @@ class IntegrationTests: StringSpec() {
         private const val SOURCE_BUCKET_FIELD_NAME = "source_bucket"
         private const val DESTINATION_BUCKET_FIELD_NAME = "destination_bucket"
         private const val PIPELINE_FIELD_NAME = "pipeline_name"
+        private const val RECIPIENT_FIELD_NAME = "recipient_name"
         private const val SOURCE_PREFIX_FIELD_NAME = "source_prefix"
         private const val DESTINATION_PREFIX_FIELD_NAME = "destination_prefix"
         private const val TRANSFER_TYPE_FIELD_NAME = "transfer_type"
