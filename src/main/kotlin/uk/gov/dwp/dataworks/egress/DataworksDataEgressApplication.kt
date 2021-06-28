@@ -20,12 +20,10 @@ import java.util.concurrent.atomic.AtomicBoolean
 class DataworksDataEgressApplication(
     private val queueService: QueueService,
     private val dbService: DbService,
-    private val dataService: DataService,
-    private val metricsService: MetricsService,
+    private val dataService: DataService
 ) : CommandLineRunner {
 
     override fun run(vararg args: String?) {
-        metricsService.startMetricsEndpoint()
         runBlocking {
             while (proceed.get()) {
                 try {
