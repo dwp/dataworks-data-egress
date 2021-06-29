@@ -64,8 +64,12 @@ class DataServiceImplTest : WordSpec() {
                     on { decrypt(any(), any(), any()) } doReturn "DECRYPTED_CONTENTS".toByteArray()
                 }
                 val compressionService = mock<CompressionService>()
+
                 reset(sentFilesSuccess)
                 reset(sentFilesFailure)
+
+                val sentFilesSuccessChild = mock<Counter.Child>()
+                given(sentFilesSuccess.labels(any(), any(), any(), any(), any())).willReturn(sentFilesSuccessChild)
 
 
                 val dataService = DataServiceImpl(
@@ -111,7 +115,7 @@ class DataServiceImplTest : WordSpec() {
                 verifyZeroInteractions(assumedRoleClient)
                 verifyZeroInteractions(compressionService)
 
-                verify(sentFilesSuccess, times(100)).inc()
+                verify(sentFilesSuccessChild, times(100)).inc()
                 verifyZeroInteractions(sentFilesFailure)
             }
 
@@ -178,6 +182,8 @@ class DataServiceImplTest : WordSpec() {
                 }
                 reset(sentFilesSuccess)
                 reset(sentFilesFailure)
+                val sentFilesSuccessChild = mock<Counter.Child>()
+                given(sentFilesSuccess.labels(any(), any(), any(), any(), any())).willReturn(sentFilesSuccessChild)
                 val dataService = DataServiceImpl(
                     s3AsyncClient,
                     s3Client,
@@ -216,7 +222,7 @@ class DataServiceImplTest : WordSpec() {
                 verify(compressionService, times(100)).compress(any(), any())
                 verifyNoMoreInteractions(compressionService)
 
-                verify(sentFilesSuccess, times(100)).inc()
+                verify(sentFilesSuccessChild, times(100)).inc()
                 verifyZeroInteractions(sentFilesFailure)
 
                 reset(sentFilesSuccess)
@@ -255,6 +261,8 @@ class DataServiceImplTest : WordSpec() {
 
                 reset(sentFilesSuccess)
                 reset(sentFilesFailure)
+                val sentFilesSuccessChild = mock<Counter.Child>()
+                given(sentFilesSuccess.labels(any(), any(), any(), any(), any())).willReturn(sentFilesSuccessChild)
 
                 val dataService = DataServiceImpl(
                     s3AsyncClient,
@@ -304,7 +312,7 @@ class DataServiceImplTest : WordSpec() {
                 assert(filesCount == 100)
                 file.deleteRecursively()
 
-                verify(sentFilesSuccess, times(100)).inc()
+                verify(sentFilesSuccessChild, times(100)).inc()
                 verifyZeroInteractions(sentFilesFailure)
 
                 reset(sentFilesSuccess)

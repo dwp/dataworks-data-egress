@@ -23,15 +23,17 @@ import java.lang.RuntimeException
 import com.amazonaws.services.s3.model.GetObjectRequest as GetObjectRequestVersion1
 
 @Service
-class DataServiceImpl(private val s3AsyncClient: S3AsyncClient,
-                      private val s3Client: S3Client,
-                      private val decryptingS3Client: AmazonS3EncryptionV2,
-                      private val assumedRoleS3ClientProvider: suspend (String) -> S3AsyncClient,
-                      private val dataKeyService: DataKeyService,
-                      private val cipherService: CipherService,
-                      private val compressionService: CompressionService,
-                      private val sentFilesSuccess: Counter,
-                      private val sentFilesFailure: Counter): DataService {
+class DataServiceImpl(
+    private val s3AsyncClient: S3AsyncClient,
+    private val s3Client: S3Client,
+    private val decryptingS3Client: AmazonS3EncryptionV2,
+    private val assumedRoleS3ClientProvider: suspend (String) -> S3AsyncClient,
+    private val dataKeyService: DataKeyService,
+    private val cipherService: CipherService,
+    private val compressionService: CompressionService,
+    private val sentFilesSuccess: Counter,
+    private val sentFilesFailure: Counter
+) : DataService {
 
     override suspend fun egressObjects(specifications: List<EgressSpecification>): Boolean =
         specifications.map { specification -> egressObjects(specification) }.all { it }
@@ -56,13 +58,23 @@ class DataServiceImpl(private val s3AsyncClient: S3AsyncClient,
                     putObjectRequest(specification, key)
                 }
                 egressClient(specification).putObject(request, AsyncRequestBody.fromBytes(targetContents)).await()
-                sentFilesSuccess.labels(specification.sourcePrefix, specification.pipelineName, specification.destinationPrefix, specification.recipient, specification.transferType)
-                sentFilesSuccess.inc()
+                sentFilesSuccess.labels(
+                    specification.sourcePrefix,
+                    specification.pipelineName,
+                    specification.destinationPrefix,
+                    specification.recipient,
+                    specification.transferType
+                ).inc()
                 true
             } else if (specification.transferType.equals("SFT", true)) {
                 writeToFile(File(key).name, specification.destinationPrefix, targetContents)
-                sentFilesSuccess.labels(specification.sourcePrefix, specification.pipelineName, specification.destinationPrefix, specification.recipient, specification.transferType)
-                sentFilesSuccess.inc()
+                sentFilesSuccess.labels(
+                    specification.sourcePrefix,
+                    specification.pipelineName,
+                    specification.destinationPrefix,
+                    specification.recipient,
+                    specification.transferType
+                ).inc()
                 true
             } else {
                 logger.warn("Unsupported transfer type", "specification" to "$specification")
@@ -70,8 +82,13 @@ class DataServiceImpl(private val s3AsyncClient: S3AsyncClient,
             }
         } catch (e: Exception) {
             logger.error("Failed to egress object", e, "key" to key, "specification" to "$specification")
-            sentFilesFailure.labels(specification.sourcePrefix, specification.pipelineName, specification.destinationPrefix, specification.recipient, specification.transferType)
-            sentFilesFailure.inc()
+            sentFilesFailure.labels(
+                specification.sourcePrefix,
+                specification.pipelineName,
+                specification.destinationPrefix,
+                specification.recipient,
+                specification.transferType
+            ).inc()
             false
         }
 
@@ -84,8 +101,10 @@ class DataServiceImpl(private val s3AsyncClient: S3AsyncClient,
         }
 
 
-    private fun putObjectRequest(specification: EgressSpecification,
-                                 key: String): PutObjectRequest =
+    private fun putObjectRequest(
+        specification: EgressSpecification,
+        key: String
+    ): PutObjectRequest =
         with(PutObjectRequest.builder()) {
             bucket(specification.destinationBucket)
             serverSideEncryption(ServerSideEncryption.AWS_KMS)
@@ -94,21 +113,29 @@ class DataServiceImpl(private val s3AsyncClient: S3AsyncClient,
             build()
         }
 
-    private fun putObjectRequestWithEncryptionMetadata(specification: EgressSpecification,
-                                                       key: String, metadata: Map<String, String>): PutObjectRequest =
+    private fun putObjectRequestWithEncryptionMetadata(
+        specification: EgressSpecification,
+        key: String, metadata: Map<String, String>
+    ): PutObjectRequest =
         with(PutObjectRequest.builder()) {
             bucket(specification.destinationBucket)
             key(targetKey(specification, key))
             acl(ObjectCannedACL.BUCKET_OWNER_FULL_CONTROL)
             serverSideEncryption(ServerSideEncryption.AWS_KMS)
-            metadata(mapOf(INITIALISATION_VECTOR_METADATA_KEY to metadata[INITIALISATION_VECTOR_METADATA_KEY],
-                ENCRYPTING_KEY_ID_METADATA_KEY to metadata[ENCRYPTING_KEY_ID_METADATA_KEY],
-                CIPHERTEXT_METADATA_KEY to metadata[CIPHERTEXT_METADATA_KEY]))
+            metadata(
+                mapOf(
+                    INITIALISATION_VECTOR_METADATA_KEY to metadata[INITIALISATION_VECTOR_METADATA_KEY],
+                    ENCRYPTING_KEY_ID_METADATA_KEY to metadata[ENCRYPTING_KEY_ID_METADATA_KEY],
+                    CIPHERTEXT_METADATA_KEY to metadata[CIPHERTEXT_METADATA_KEY]
+                )
+            )
             build()
         }
 
-    private fun targetKey(specification: EgressSpecification,
-                          key: String): String {
+    private fun targetKey(
+        specification: EgressSpecification,
+        key: String
+    ): String {
         val base = "${specification.destinationPrefix.replace(Regex("""/$"""), "")}/${File(key).name}"
             .replace(Regex("""^/"""), "")
             .replace(Regex("""\.enc$"""), if (specification.decrypt) "" else ".enc")
@@ -128,8 +155,10 @@ class DataServiceImpl(private val s3AsyncClient: S3AsyncClient,
             s3AsyncClient
         }
 
-    private fun targetContents(specification: EgressSpecification,
-                               sourceContents: ByteArray): ByteArray {
+    private fun targetContents(
+        specification: EgressSpecification,
+        sourceContents: ByteArray
+    ): ByteArray {
         return if (specification.compress) {
             compressionService.compress(specification.compressionFormat, sourceContents)
         } else {
@@ -137,31 +166,39 @@ class DataServiceImpl(private val s3AsyncClient: S3AsyncClient,
         }
     }
 
-    private suspend fun sourceContents(metadata: MutableMap<String, String>,
-                                       specification: EgressSpecification,
-                                       key: String): ByteArray {
+    private suspend fun sourceContents(
+        metadata: MutableMap<String, String>,
+        specification: EgressSpecification,
+        key: String
+    ): ByteArray {
         val metadataPairs = metadata.entries.map { (k, v) -> Pair(k, v) }.toTypedArray()
 
         return when {
             wasEncryptedByEmr(metadata) -> {
-                logger.info("Found EMR client-side encrypted object",
+                logger.info(
+                    "Found EMR client-side encrypted object",
                     "bucket" to specification.sourceBucket,
                     "key" to key,
-                    *metadataPairs)
+                    *metadataPairs
+                )
                 emrEncryptedObjectContents(specification.sourceBucket, key)
             }
             wasEncryptedByHtme(metadata) && specification.decrypt -> {
-                logger.info("Found HTME encrypted object",
+                logger.info(
+                    "Found HTME encrypted object",
                     "bucket" to specification.sourceBucket,
                     "key" to key,
-                    *metadataPairs)
+                    *metadataPairs
+                )
                 htmeEncryptedObjectContents(specification.sourceBucket, key)
             }
             else -> {
-                logger.info("Found unencrypted object",
+                logger.info(
+                    "Found unencrypted object",
                     "bucket" to specification.sourceBucket,
                     "key" to key,
-                    *metadataPairs)
+                    *metadataPairs
+                )
                 unencryptedObjectContents(specification.sourceBucket, key)
             }
         }
@@ -210,7 +247,7 @@ class DataServiceImpl(private val s3AsyncClient: S3AsyncClient,
             build()
         }
 
-    private fun writeToFile(fileName: String, folder: String, targetContents: ByteArray ) {
+    private fun writeToFile(fileName: String, folder: String, targetContents: ByteArray) {
         val parent = File(if (folder.startsWith("/")) folder else "/$folder")
 
         if (!parent.isDirectory) {
