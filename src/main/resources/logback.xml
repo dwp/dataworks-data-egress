@@ -6,6 +6,8 @@
             <layout class="uk.gov.dwp.dataworks.logging.LoggerLayoutAppender" />
         </encoder>
     </appender>
+
+    <appender name="METRICS" class="io.prometheus.client.logback.InstrumentedAppender" />
     <!--
     The org.apache http library is used by the aws sdk to perform http requests with the aws backend.
     This library (the http one) outputs as debug the body of all the responses that come back from aws.

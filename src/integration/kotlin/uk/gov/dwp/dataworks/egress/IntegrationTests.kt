@@ -190,8 +190,7 @@ class IntegrationTests: StringSpec() {
 
         "It should have pushed metrics" {
             val metricNames = withTimeout(Duration.ofSeconds(TEST_TIMEOUT)) { egressMetrics() }
-            metricNames shouldContainAll listOf("data_egress_files_sent_success_total",
-                "data_egress_files_sent_failure_total")
+            metricNames shouldContainAll listOf("data_egress_files_sent_success_total")
         }
     }
 
