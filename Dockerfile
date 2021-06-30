@@ -51,7 +51,7 @@ COPY ./dataworks-data-egress-truststore.jks ./development-truststore.jks
 
 RUN mkdir -p /opt/jmx_exporter
 COPY ./resources/jmx_exporter_config.yml /opt/jmx_exporter/
-RUN curl -L https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_httpserver/0.15.0/jmx_prometheus_httpserver-0.15.0.jar -o /opt/jmx_exporter/jmx_exporter.jar
+RUN curl -L https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_httpserver/${jmx_exporter_version}/jmx_prometheus_httpserver-${jmx_exporter_version}.jar -o /opt/jmx_exporter/jmx_exporter.jar
 
 ENV JAVA_OPTS="-javaagent:/opt/jmx_exporter/jmx_exporter.jar=9996:/opt/jmx_exporter/jmx_exporter_config.yml"
 
