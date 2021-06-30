@@ -107,7 +107,6 @@ class DataServiceImpl(
     ): PutObjectRequest =
         with(PutObjectRequest.builder()) {
             bucket(specification.destinationBucket)
-            serverSideEncryption(ServerSideEncryption.AWS_KMS)
             acl(ObjectCannedACL.BUCKET_OWNER_FULL_CONTROL)
             key(targetKey(specification, key))
             build()
@@ -121,7 +120,6 @@ class DataServiceImpl(
             bucket(specification.destinationBucket)
             key(targetKey(specification, key))
             acl(ObjectCannedACL.BUCKET_OWNER_FULL_CONTROL)
-            serverSideEncryption(ServerSideEncryption.AWS_KMS)
             metadata(
                 mapOf(
                     INITIALISATION_VECTOR_METADATA_KEY to metadata[INITIALISATION_VECTOR_METADATA_KEY],
