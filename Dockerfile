@@ -28,7 +28,6 @@ RUN apk update \
     && apk upgrade \
     && apk add --no-cache ca-certificates \
     && apk add --no-cache util-linux \
-    && apk add --no-cache curl \
     && apk add --no-cache g++ python3 python3-dev libffi-dev openssl-dev gcc py3-pip rust cargo \
     && pip3 install --upgrade pip setuptools \
     && pip3 install https://github.com/dwp/acm-pca-cert-generator/releases/download/${acm_cert_helper_version}/acm_cert_helper-${acm_cert_helper_version}.tar.gz
@@ -48,12 +47,6 @@ WORKDIR /dataworks-data-egress
 COPY --from=build /build/dataworks-data-egress.jar .
 COPY ./dataworks-data-egress-keystore.jks ./development-keystore.jks
 COPY ./dataworks-data-egress-truststore.jks ./development-truststore.jks
-
-RUN mkdir -p /opt/jmx_exporter
-COPY ./resources/jmx_exporter_config.yml /opt/jmx_exporter/
-RUN curl -L https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_httpserver/${jmx_exporter_version}/jmx_prometheus_httpserver-${jmx_exporter_version}.jar -o /opt/jmx_exporter/jmx_exporter.jar
-
-ENV JAVA_OPTS="-javaagent:/opt/jmx_exporter/jmx_exporter.jar=9996:/opt/jmx_exporter/jmx_exporter_config.yml"
 
 RUN chown -R $USER_NAME.$GROUP_NAME /dataworks-data-egress
 RUN chmod -R a+rwx /etc/ssl/
