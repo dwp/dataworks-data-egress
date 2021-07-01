@@ -65,6 +65,7 @@ class DataServiceImpl(
                     specification.recipient,
                     specification.transferType
                 ).inc()
+                logger.info("Egressed s3 object", "key" to key, "specification" to "$specification")
                 true
             } else if (specification.transferType.equals("SFT", true)) {
                 writeToFile(File(key).name, specification.destinationPrefix, targetContents)
@@ -75,6 +76,7 @@ class DataServiceImpl(
                     specification.recipient,
                     specification.transferType
                 ).inc()
+                logger.info("Egressed s3 object", "key" to key, "specification" to "$specification")
                 true
             } else {
                 logger.warn("Unsupported transfer type", "specification" to "$specification")
