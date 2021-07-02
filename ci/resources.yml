@@ -15,3 +15,15 @@ resources:
       access_token: ((dataworks-secrets.concourse_github_pat))
     webhook_token: ((dataworks.concourse_github_webhook_token))
     check_every: 720h
+
+  - name: dataworks-data-egress-update-pipeline
+    type: git
+    source:
+      branch: master
+      uri: https://github.com/dwp/dataworks-data-egress.git
+      paths:
+        - ci/*
+        - aviator.yml
+    webhook_token: ((dataworks.concourse_github_webhook_token))
+    check_every: 720h 
+    

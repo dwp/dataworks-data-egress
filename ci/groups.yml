@@ -10,3 +10,7 @@ groups:
     jobs:
       - mirror-dwpdigital-dataworks-data-egress-dev
       - mirror-dwpdigital-dataworks-data-egress
+  - name: update-pipeline
+    jobs:
+      - update-pipeline
+      
