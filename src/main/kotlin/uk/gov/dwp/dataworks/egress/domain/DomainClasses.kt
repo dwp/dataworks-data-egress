@@ -6,6 +6,8 @@ data class EgressSpecification(val sourceBucket: String,
                                val destinationPrefix: String,
                                val transferType: String,
                                val decrypt: Boolean = false,
+                               val rewrapDataKey: Boolean = false,
+                               val encryptingKeySsmParmName: String?,
                                val compress: Boolean = false,
                                val compressionFormat: String?,
                                val roleArn: String?,
@@ -13,6 +15,7 @@ data class EgressSpecification(val sourceBucket: String,
                                val recipient: String)
 
 data class DataKeyResult(val dataKeyEncryptionKeyId: String, val plaintextDataKey: String, val ciphertextDataKey: String)
+data class ReWrapKeyParameterStoreResult(val KeyId: String, val PublicKey: String)
 
 data class EncryptionResult(val initialisationVector: String, val encrypted: ByteArray) {
     override fun equals(other: Any?): Boolean {
