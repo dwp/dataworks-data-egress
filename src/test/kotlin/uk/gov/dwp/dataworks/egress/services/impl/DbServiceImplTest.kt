@@ -83,10 +83,10 @@ class DbServiceImplTest : WordSpec() {
                 entries shouldContainExactly listOf(egressSpecification("$interpolatedPrefix/"))
             }
 
-            "match prefix having date in path" {
+            "match source prefix having date within path" {
                 val interpolatedPrefix = "source/prefix/${todaysDate()}/collection"
                 val receivedPrefix = "$interpolatedPrefix/pipeline_success.flag"
-                val matchingPrefix = "source/prefix/$TODAYS_DATE_PLACEHOLDER/collection"
+                val matchingPrefix = "source/prefix/$TODAYS_DATE_PLACEHOLDER/collection/"
 
                 val matchingItem = egressTableItem(matchingPrefix)
                 val scanResponse = with(ScanResponse.builder()) {
@@ -101,7 +101,6 @@ class DbServiceImplTest : WordSpec() {
                 val entries = dbService.tableEntryMatches(receivedPrefix)
                 entries shouldContainExactly listOf(egressSpecification("$interpolatedPrefix/"))
             }
-
         }
     }
 
