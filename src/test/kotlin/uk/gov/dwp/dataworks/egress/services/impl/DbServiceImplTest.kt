@@ -83,7 +83,7 @@ class DbServiceImplTest : WordSpec() {
                 entries shouldContainExactly listOf(egressSpecification("$interpolatedPrefix/"))
             }
 
-            "match source with wildcard to destination with date" {
+            "match prefix having date in path" {
                 val interpolatedPrefix = "source/prefix/${todaysDate()}/collection"
                 val receivedPrefix = "$interpolatedPrefix/pipeline_success.flag"
                 val matchingPrefix = "source/prefix/$TODAYS_DATE_PLACEHOLDER/collection"
