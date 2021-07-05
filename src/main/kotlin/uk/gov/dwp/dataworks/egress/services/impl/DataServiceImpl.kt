@@ -48,8 +48,10 @@ class DataServiceImpl(
             logger.info("Egressing s3 object", "key" to key, "specification" to "$specification")
             val metadata = objectMetadata(specification.sourceBucket, key)
             logger.info("Got metadata", "metadata" to "$metadata")
+            logger.info("Getting source contents", "specification" to "$specification")
             val sourceContents = sourceContents(metadata, specification, key)
             logger.info("Got source contents", "specification" to "$specification")
+            logger.info("Getting target contents", "specification" to "$specification")
             val targetContents = targetContents(specification, sourceContents)
             logger.info("Got target contents", "specification" to "$specification")
             when {
