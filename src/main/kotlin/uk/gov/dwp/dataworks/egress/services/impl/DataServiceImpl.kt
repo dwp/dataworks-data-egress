@@ -19,7 +19,6 @@ import uk.gov.dwp.dataworks.egress.services.DataService
 import uk.gov.dwp.dataworks.logging.DataworksLogger
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.lang.RuntimeException
 import com.amazonaws.services.s3.model.GetObjectRequest as GetObjectRequestVersion1
 
 @Service
@@ -50,37 +49,45 @@ class DataServiceImpl(
             val metadata = objectMetadata(specification.sourceBucket, key)
             logger.info("Got metadata", "metadata" to "$metadata")
             val sourceContents = sourceContents(metadata, specification, key)
+            logger.info("Got source contents", "specification" to "$specification")
             val targetContents = targetContents(specification, sourceContents)
-            if (specification.transferType.equals("S3", true)) {
-                val request = if (wasEncryptedByHtme(metadata) && !specification.decrypt) {
-                    putObjectRequestWithEncryptionMetadata(specification, key, metadata)
-                } else {
-                    putObjectRequest(specification, key)
+            logger.info("Got target contents", "specification" to "$specification")
+            when {
+                specification.transferType.equals("S3", true) -> {
+                    logger.info("Transferring contents to s3", "specification" to "$specification")
+                    val request = if (wasEncryptedByHtme(metadata) && !specification.decrypt) {
+                        putObjectRequestWithEncryptionMetadata(specification, key, metadata)
+                    } else {
+                        putObjectRequest(specification, key)
+                    }
+                    egressClient(specification).putObject(request, AsyncRequestBody.fromBytes(targetContents)).await()
+                    sentFilesSuccess.labels(
+                        specification.sourcePrefix,
+                        specification.pipelineName,
+                        specification.destinationPrefix,
+                        specification.recipient,
+                        specification.transferType
+                    ).inc()
+                    logger.info("Transferred contents to s3", "key" to key, "specification" to "$specification")
+                    true
                 }
-                egressClient(specification).putObject(request, AsyncRequestBody.fromBytes(targetContents)).await()
-                sentFilesSuccess.labels(
-                    specification.sourcePrefix,
-                    specification.pipelineName,
-                    specification.destinationPrefix,
-                    specification.recipient,
-                    specification.transferType
-                ).inc()
-                logger.info("Egressed s3 object", "key" to key, "specification" to "$specification")
-                true
-            } else if (specification.transferType.equals("SFT", true)) {
-                writeToFile(File(key).name, specification.destinationPrefix, targetContents)
-                sentFilesSuccess.labels(
-                    specification.sourcePrefix,
-                    specification.pipelineName,
-                    specification.destinationPrefix,
-                    specification.recipient,
-                    specification.transferType
-                ).inc()
-                logger.info("Egressed s3 object", "key" to key, "specification" to "$specification")
-                true
-            } else {
-                logger.warn("Unsupported transfer type", "specification" to "$specification")
-                false
+                specification.transferType.equals("SFT", true) -> {
+                    logger.info("Transferring contents to file", "specification" to "$specification")
+                    writeToFile(File(key).name, specification.destinationPrefix, targetContents)
+                    sentFilesSuccess.labels(
+                        specification.sourcePrefix,
+                        specification.pipelineName,
+                        specification.destinationPrefix,
+                        specification.recipient,
+                        specification.transferType
+                    ).inc()
+                    logger.info("Transferred contents to file", "key" to key, "specification" to "$specification")
+                    true
+                }
+                else -> {
+                    logger.warn("Unsupported transfer type", "specification" to "$specification")
+                    false
+                }
             }
         } catch (e: Exception) {
             logger.error("Failed to egress object", e, "key" to key, "specification" to "$specification")
