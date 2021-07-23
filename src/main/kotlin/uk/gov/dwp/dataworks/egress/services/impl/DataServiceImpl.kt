@@ -256,21 +256,22 @@ class DataServiceImpl(
             build()
         }
 
-    private fun writeToFile(fileName: String, folder: String, targetContents: ByteArray) {
-        val parent = File(if (folder.startsWith("/")) folder else "/$folder")
+    private suspend fun writeToFile(fileName: String, folder: String, targetContents: ByteArray) =
+        withContext(Dispatchers.IO) {
+            val parent = File(if (folder.startsWith("/")) folder else "/$folder")
 
-        if (!parent.isDirectory) {
-            logger.info("Making parent directory", "parent" to "$parent", "filename" to fileName)
-            if (!parent.mkdirs()) {
-                logger.error("Failed to make parent directories", "parent" to "$parent", "filename" to fileName)
-                throw RuntimeException("Failed to make parent directories, parent: '$parent', filename: '$fileName'")
+            if (!parent.isDirectory) {
+                logger.info("Making parent directory", "parent" to "$parent", "filename" to fileName)
+                if (!parent.mkdirs()) {
+                    logger.error("Failed to make parent directories", "parent" to "$parent", "filename" to fileName)
+                    throw RuntimeException("Failed to make parent directories, parent: '$parent', filename: '$fileName'")
+                }
             }
-        }
 
-        val file = File(parent, fileName)
-        logger.info("Writing file", "file" to "$file", "parent" to "$parent", "filename" to fileName)
-        file.writeBytes(targetContents)
-    }
+            val file = File(parent, fileName)
+            logger.info("Writing file", "file" to "$file", "parent" to "$parent", "filename" to fileName)
+            file.writeBytes(targetContents)
+        }
 
     companion object {
         private val logger = DataworksLogger.getLogger(DataServiceImpl::class)
