@@ -14,6 +14,7 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient
 import software.amazon.awssdk.services.s3.S3AsyncClient
 import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.sqs.SqsAsyncClient
+import software.amazon.awssdk.services.ssm.SsmClient
 import java.time.Duration
 
 @Configuration
@@ -38,7 +39,12 @@ class AwsConfiguration(private val encryptionMaterialsProvider: EncryptionMateri
             build()
         }
 
-
+    @Bean
+    fun ssmClient(): SsmClient =
+        with (SsmClient.builder()) {
+            overrideConfiguration(timeoutConfiguration())
+            build()
+        }
 
     @Bean
     fun s3AsyncClient(): S3AsyncClient =
