@@ -21,7 +21,7 @@ class CommonConfiguration {
     }
 
     @Bean
-    fun assumedRoleSsmClientProvider(): (String) -> SsmClient {
+    fun assumedRoleSsmClientProvider(): suspend (String) -> SsmClient {
         val stsClient = StsClient.create()
         return { roleArn: String ->
             with(SsmClient.builder()) {
