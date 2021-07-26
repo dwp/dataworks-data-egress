@@ -5,7 +5,6 @@ import com.amazonaws.services.s3.model.S3ObjectInputStream
 import com.nhaarman.mockitokotlin2.*
 import io.kotest.core.spec.style.WordSpec
 import io.prometheus.client.Counter
-import org.mockito.Mockito
 import org.springframework.boot.test.mock.mockito.MockBean
 import software.amazon.awssdk.core.ResponseBytes
 import software.amazon.awssdk.core.ResponseInputStream
@@ -15,6 +14,8 @@ import software.amazon.awssdk.http.AbortableInputStream
 import software.amazon.awssdk.services.s3.S3AsyncClient
 import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.s3.model.*
+import software.amazon.awssdk.services.ssm.SsmClient
+import software.amazon.awssdk.services.ssm.model.*
 import uk.gov.dwp.dataworks.egress.domain.EgressSpecification
 import uk.gov.dwp.dataworks.egress.services.CipherService
 import uk.gov.dwp.dataworks.egress.services.CompressionService
@@ -44,6 +45,7 @@ class DataServiceImplTest : WordSpec() {
                 val s3Client = mock<S3Client> {
                     on { getObject(any<GetObjectRequest>()) } doReturnConsecutively objectsWithMetadata
                 }
+                val ssmClient = mock<SsmClient>()
 
                 val decryptedS3Object = mock<S3ObjectVersion1> {
                     on { objectContent } doReturn S3ObjectInputStream(
@@ -55,8 +57,10 @@ class DataServiceImplTest : WordSpec() {
                     on { getObject(any()) } doReturn decryptedS3Object
                 }
 
-                val assumedRoleClient = mock<S3AsyncClient>()
-                val assumedRoleClientProvider: suspend (String) -> S3AsyncClient = { assumedRoleClient }
+                val assumedRoleS3Client = mock<S3AsyncClient>()
+                val assumedRoleSsmClient = mock<SsmClient>()
+                val assumedRoleS3ClientProvider: suspend (String) -> S3AsyncClient = { assumedRoleS3Client }
+                val assumedRoleSsmClientProvider: suspend (String) -> SsmClient = { assumedRoleSsmClient }
                 val dataKeyService = mock<DataKeyService> {
                     on { decryptKey(any(), any()) } doReturn "DECRYPTED_KEY"
                 }
@@ -75,8 +79,10 @@ class DataServiceImplTest : WordSpec() {
                 val dataService = DataServiceImpl(
                     s3AsyncClient,
                     s3Client,
+                    ssmClient,
                     decryptingS3Client,
-                    assumedRoleClientProvider,
+                    assumedRoleS3ClientProvider,
+                    assumedRoleSsmClientProvider,
                     dataKeyService,
                     cipherService,
                     compressionService,
@@ -84,12 +90,12 @@ class DataServiceImplTest : WordSpec() {
                     sentFilesFailure
                 )
 
-
                 val specification = EgressSpecification(
                     SOURCE_BUCKET, SOURCE_PREFIX,
                     DESTINATION_BUCKET, DESTINATION_PREFIX, S3_TRANSFER_TYPE,
-                    decrypt = true, compress = false, null, null,
-                    PIPELINE_NAME, RECIPIENT
+                    decrypt = true, rewrapDataKey=false, encryptingKeySsmParmName="",
+                    compress = false, compressionFormat = null, roleArn = null,
+                    pipelineName = PIPELINE_NAME, recipient = RECIPIENT
                 )
 
                 dataService.egressObjects(specification)
@@ -112,11 +118,139 @@ class DataServiceImplTest : WordSpec() {
 
                 verify(decryptingS3Client, times(33)).getObject(any())
                 verifyNoMoreInteractions(decryptingS3Client)
-                verifyZeroInteractions(assumedRoleClient)
+                verifyZeroInteractions(assumedRoleS3Client)
                 verifyZeroInteractions(compressionService)
 
                 verify(sentFilesSuccessChild, times(100)).inc()
                 verifyZeroInteractions(sentFilesFailure)
+            }
+
+            "assume role and re-wrap data keys" {
+                val objects = objectsSummaries()
+               val listObjectsResponse = with(ListObjectsV2Response.builder()) {
+                    contents(objects)
+                    build()
+                }
+
+                val objectsWithContents = List(100) { index ->
+                    val resp = with(GetObjectResponse.builder()) {
+                        metadata(
+                            mapOf(
+                                ENCRYPTING_KEY_ID_METADATA_KEY to ENCRYPTING_KEY_ID_METADATA_VALUE,
+                                INITIALISATION_VECTOR_METADATA_KEY to INITIALISATION_VECTOR_METADATA_VALUE,
+                                CIPHERTEXT_METADATA_KEY to CIPHERTEXT_METADATA_VALUE
+                            )
+                        )
+                        build()
+                    }
+                    ResponseBytes.fromByteArray(resp, "OBJECT_BODY_$index".toByteArray())
+                }.map { CompletableFuture.completedFuture(it) }
+
+                val s3AsyncClient = mock<S3AsyncClient> {
+                    on {
+                        listObjectsV2(any<ListObjectsV2Request>())
+                    } doReturn CompletableFuture.completedFuture(listObjectsResponse)
+
+                    on {
+                        getObject(
+                            any<GetObjectRequest>(),
+                            any<AsyncResponseTransformer<GetObjectResponse, ResponseBytes<GetObjectResponse>>>()
+                        )
+                    } doReturnConsecutively objectsWithContents
+                }
+
+                val objectsWithMetadata = List(100) {
+                    with(GetObjectResponse.builder()) {
+                        metadata(mapOf(ENCRYPTING_KEY_ID_METADATA_KEY to ENCRYPTING_KEY_ID_METADATA_VALUE,
+                            INITIALISATION_VECTOR_METADATA_KEY to INITIALISATION_VECTOR_METADATA_VALUE,
+                            CIPHERTEXT_METADATA_KEY to CIPHERTEXT_METADATA_VALUE))
+                        build()
+                    }
+                }.map {
+                    ResponseInputStream(it, AbortableInputStream.create(ByteArrayInputStream("CONTENTS".toByteArray())))
+                }
+
+                val s3Client = mock<S3Client> {
+                    on { getObject(any<GetObjectRequest>()) } doReturnConsecutively objectsWithMetadata
+                }
+
+                val ssmClient = mock<SsmClient> ()
+                val decryptingS3Client = mock<AmazonS3EncryptionV2>()
+                val assumedRoleS3Client = mock<S3AsyncClient> {
+                    on {
+                        putObject(any<PutObjectRequest>(), any<AsyncRequestBody>())
+                    } doReturn CompletableFuture.completedFuture(PutObjectResponse.builder().build())
+                }
+                val assumedRoleSsmClient = mock<SsmClient> {
+                    on {
+                        getParameter(GetParameterRequest.builder().name(SSM_PARAM_NAME).build())
+                    } doReturn GetParameterResponse.builder().parameter(SSM_MOCK_PARAM).build()
+                }
+                val assumedRoleS3ClientProvider: suspend (String) -> S3AsyncClient = { assumedRoleS3Client }
+                val assumedRoleSsmClientProvider: suspend (String) -> SsmClient = { assumedRoleSsmClient }
+                val dataKeyService = mock<DataKeyService> {
+                    on { decryptKey(any(), any()) } doReturn "DECRYPTED_KEY"
+                }
+                val cipherService = mock<CipherService> {
+                    on { decrypt(any(), any(), any()) } doReturn "DECRYPTED_CONTENTS".toByteArray()
+                    on { rsaEncrypt(any(), any()) } doReturn "RSA_ENCRYPTED".toByteArray()
+                }
+
+                val compressionService = mock<CompressionService> {
+                    on { compress(any(), any()) } doReturn "COMPRESSED_CONTENTS".toByteArray()
+                }
+                reset(sentFilesSuccess)
+                reset(sentFilesFailure)
+                val sentFilesSuccessChild = mock<Counter.Child>()
+                given(sentFilesSuccess.labels(any(), any(), any(), any(), any())).willReturn(sentFilesSuccessChild)
+                val dataService = DataServiceImpl(
+                    s3AsyncClient,
+                    s3Client,
+                    ssmClient,
+                    decryptingS3Client,
+                    assumedRoleS3ClientProvider,
+                    assumedRoleSsmClientProvider,
+                    dataKeyService,
+                    cipherService,
+                    compressionService,
+                    sentFilesSuccess,
+                    sentFilesFailure
+                )
+
+                val specification = EgressSpecification(
+                    SOURCE_BUCKET, SOURCE_PREFIX,
+                    DESTINATION_BUCKET, DESTINATION_PREFIX, S3_TRANSFER_TYPE,
+                    decrypt = false, rewrapDataKey=true, encryptingKeySsmParmName= SSM_PARAM_NAME,
+                    compress = false, compressionFormat = "gz", roleArn = "ROLE_ARN",
+                    pipelineName = PIPELINE_NAME, recipient = RECIPIENT
+                )
+                dataService.egressObjects(specification)
+                verify(s3Client, times(100)).getObject(any<GetObjectRequest>())
+                verifyNoMoreInteractions(s3Client)
+
+                verify(s3AsyncClient, times(1)).listObjectsV2(any<ListObjectsV2Request>())
+                verify(s3AsyncClient, times(100)).getObject(
+                    any<GetObjectRequest>(),
+                    any<AsyncResponseTransformer<GetObjectResponse, ResponseBytes<GetObjectResponse>>>()
+                )
+                verify(assumedRoleSsmClient, times(100)).getParameter(any<GetParameterRequest>())
+                verifyNoMoreInteractions(s3AsyncClient)
+                verify(dataKeyService, times(100)).decryptKey(any(), any())
+                verify(cipherService, times(100)).rsaEncrypt(any(), any())
+
+                verifyNoMoreInteractions(dataKeyService)
+                verifyNoMoreInteractions(cipherService)
+                verifyZeroInteractions(decryptingS3Client)
+                verify(assumedRoleS3Client, times(100)).putObject(any<PutObjectRequest>(), any<AsyncRequestBody>())
+                verifyNoMoreInteractions(assumedRoleS3Client)
+                verifyNoMoreInteractions(assumedRoleSsmClient)
+                verifyZeroInteractions(compressionService)
+
+                verify(sentFilesSuccessChild, times(100)).inc()
+                verifyZeroInteractions(sentFilesFailure)
+
+                reset(sentFilesSuccess)
+                reset(sentFilesFailure)
             }
 
             "assume role, not decrypt, compress" {
@@ -167,13 +301,16 @@ class DataServiceImplTest : WordSpec() {
                     on { getObject(any<GetObjectRequest>()) } doReturnConsecutively objectsWithMetadata
                 }
 
+                val ssmClient = mock<SsmClient> ()
                 val decryptingS3Client = mock<AmazonS3EncryptionV2>()
-                val assumedRoleClient = mock<S3AsyncClient> {
+                val assumedRoleS3Client = mock<S3AsyncClient> {
                     on {
                         putObject(any<PutObjectRequest>(), any<AsyncRequestBody>())
                     } doReturn CompletableFuture.completedFuture(PutObjectResponse.builder().build())
                 }
-                val assumedRoleClientProvider: suspend (String) -> S3AsyncClient = { assumedRoleClient }
+                val assumedRoleSsmClient = mock<SsmClient>()
+                val assumedRoleS3ClientProvider: suspend (String) -> S3AsyncClient = { assumedRoleS3Client }
+                val assumedRoleSsmClientProvider: suspend (String) -> SsmClient = { assumedRoleSsmClient }
                 val dataKeyService = mock<DataKeyService>()
                 val cipherService = mock<CipherService>()
 
@@ -187,8 +324,10 @@ class DataServiceImplTest : WordSpec() {
                 val dataService = DataServiceImpl(
                     s3AsyncClient,
                     s3Client,
+                    ssmClient,
                     decryptingS3Client,
-                    assumedRoleClientProvider,
+                    assumedRoleS3ClientProvider,
+                    assumedRoleSsmClientProvider,
                     dataKeyService,
                     cipherService,
                     compressionService,
@@ -200,8 +339,9 @@ class DataServiceImplTest : WordSpec() {
                 val specification = EgressSpecification(
                     SOURCE_BUCKET, SOURCE_PREFIX,
                     DESTINATION_BUCKET, DESTINATION_PREFIX, S3_TRANSFER_TYPE,
-                    decrypt = false, compress = true, "gz", "ROLE_ARN",
-                    PIPELINE_NAME, RECIPIENT
+                    decrypt = false, rewrapDataKey=false, encryptingKeySsmParmName="",
+                    compress = true, compressionFormat = "gz", roleArn = "ROLE_ARN",
+                    pipelineName = PIPELINE_NAME, recipient = RECIPIENT
                 )
                 dataService.egressObjects(specification)
                 verify(s3Client, times(100)).getObject(any<GetObjectRequest>())
@@ -217,8 +357,8 @@ class DataServiceImplTest : WordSpec() {
                 verifyZeroInteractions(dataKeyService)
                 verifyZeroInteractions(cipherService)
                 verifyZeroInteractions(decryptingS3Client)
-                verify(assumedRoleClient, times(100)).putObject(any<PutObjectRequest>(), any<AsyncRequestBody>())
-                verifyNoMoreInteractions(assumedRoleClient)
+                verify(assumedRoleS3Client, times(100)).putObject(any<PutObjectRequest>(), any<AsyncRequestBody>())
+                verifyNoMoreInteractions(assumedRoleS3Client)
                 verify(compressionService, times(100)).compress(any(), any())
                 verifyNoMoreInteractions(compressionService)
 
@@ -238,6 +378,7 @@ class DataServiceImplTest : WordSpec() {
                 val s3Client = mock<S3Client> {
                     on { getObject(any<GetObjectRequest>()) } doReturnConsecutively objectsWithMetadata
                 }
+                val ssmClient = mock<SsmClient>()
 
                 val decryptedS3Object = mock<S3ObjectVersion1> {
                     on { objectContent } doReturn S3ObjectInputStream(
@@ -249,8 +390,10 @@ class DataServiceImplTest : WordSpec() {
                     on { getObject(any()) } doReturn decryptedS3Object
                 }
 
-                val assumedRoleClient = mock<S3AsyncClient>()
-                val assumedRoleClientProvider: suspend (String) -> S3AsyncClient = { assumedRoleClient }
+                val assumedRoleS3Client = mock<S3AsyncClient>()
+                val assumedRoleSsmClient = mock<SsmClient>()
+                val assumedRoleS3ClientProvider: suspend (String) -> S3AsyncClient = { assumedRoleS3Client }
+                val assumedRoleSsmClientProvider: suspend (String) -> SsmClient = { assumedRoleSsmClient }
                 val dataKeyService = mock<DataKeyService> {
                     on { decryptKey(any(), any()) } doReturn "DECRYPTED_KEY"
                 }
@@ -267,8 +410,10 @@ class DataServiceImplTest : WordSpec() {
                 val dataService = DataServiceImpl(
                     s3AsyncClient,
                     s3Client,
+                    ssmClient,
                     decryptingS3Client,
-                    assumedRoleClientProvider,
+                    assumedRoleS3ClientProvider,
+                    assumedRoleSsmClientProvider,
                     dataKeyService,
                     cipherService,
                     compressionService,
@@ -280,8 +425,9 @@ class DataServiceImplTest : WordSpec() {
                 val specification = EgressSpecification(
                     SOURCE_BUCKET, SOURCE_PREFIX,
                     DESTINATION_BUCKET, testFolderLocation, SFT_TRANSFER_TYPE,
-                    decrypt = true, compress = false, null, null,
-                    PIPELINE_NAME, RECIPIENT
+                    decrypt = true, rewrapDataKey=false, encryptingKeySsmParmName= "",
+                    compress = false, compressionFormat = null, roleArn = null,
+                    pipelineName = PIPELINE_NAME, recipient = RECIPIENT
                 )
 
                 dataService.egressObjects(specification)
@@ -303,7 +449,7 @@ class DataServiceImplTest : WordSpec() {
 
                 verify(decryptingS3Client, times(33)).getObject(any())
                 verifyNoMoreInteractions(decryptingS3Client)
-                verifyZeroInteractions(assumedRoleClient)
+                verifyZeroInteractions(assumedRoleS3Client)
                 verifyZeroInteractions(compressionService)
 
 
@@ -328,6 +474,7 @@ class DataServiceImplTest : WordSpec() {
                 val s3Client = mock<S3Client> {
                     on { getObject(any<GetObjectRequest>()) } doReturnConsecutively objectsWithMetadata
                 }
+                val ssmClient = mock<SsmClient> ()
 
                 val decryptedS3Object = mock<S3ObjectVersion1> {
                     on { objectContent } doReturn S3ObjectInputStream(
@@ -339,8 +486,10 @@ class DataServiceImplTest : WordSpec() {
                     on { getObject(any()) } doReturn decryptedS3Object
                 }
 
-                val assumedRoleClient = mock<S3AsyncClient>()
-                val assumedRoleClientProvider: suspend (String) -> S3AsyncClient = { assumedRoleClient }
+                val assumedRoleS3Client = mock<S3AsyncClient>()
+                val assumedRoleSsmClient = mock<SsmClient>()
+                val assumedRoleS3ClientProvider: suspend (String) -> S3AsyncClient = { assumedRoleS3Client }
+                val assumedRoleSsmClientProvider: suspend (String) -> SsmClient = { assumedRoleSsmClient }
                 val dataKeyService = mock<DataKeyService> {
                     on { decryptKey(any(), any()) } doReturn "DECRYPTED_KEY"
                 }
@@ -352,8 +501,10 @@ class DataServiceImplTest : WordSpec() {
                 val dataService = DataServiceImpl(
                     s3AsyncClient,
                     s3Client,
+                    ssmClient,
                     decryptingS3Client,
-                    assumedRoleClientProvider,
+                    assumedRoleS3ClientProvider,
+                    assumedRoleSsmClientProvider,
                     dataKeyService,
                     cipherService,
                     compressionService,
@@ -365,8 +516,9 @@ class DataServiceImplTest : WordSpec() {
                 val specification = EgressSpecification(
                     SOURCE_BUCKET, SOURCE_PREFIX,
                     DESTINATION_BUCKET, testFolderLocation, "3FT",
-                    decrypt = true, compress = false, null, null,
-                    PIPELINE_NAME, RECIPIENT
+                    decrypt = true, rewrapDataKey=false, encryptingKeySsmParmName="",
+                    compress = false, compressionFormat = null, roleArn = null,
+                    pipelineName = PIPELINE_NAME, recipient = RECIPIENT
                 )
 
                 dataService.egressObjects(specification)
@@ -384,7 +536,7 @@ class DataServiceImplTest : WordSpec() {
                 verifyNoMoreInteractions(cipherService)
                 verify(decryptingS3Client, times(33)).getObject(any())
                 verifyNoMoreInteractions(decryptingS3Client)
-                verifyZeroInteractions(assumedRoleClient)
+                verifyZeroInteractions(assumedRoleS3Client)
                 verifyZeroInteractions(compressionService)
             }
 
@@ -500,5 +652,23 @@ class DataServiceImplTest : WordSpec() {
         private const val ENCRYPTING_KEY_ID_METADATA_VALUE = "KEY_ID"
         private const val INITIALISATION_VECTOR_METADATA_VALUE = "INITIALISATION_VECTOR"
         private const val CIPHERTEXT_METADATA_VALUE = "ENCRYPTED_KEY"
+
+        private const val SSM_PARAM_NAME: String = "rtg_public"
+        private const val SSM_MOCK_PARAM_VALUE: String = "{\n" +
+                "  \"ValidFrom\": \"2021-07-14 14:35:30\",\n" +
+                "  \"KeyId\": \"4f9fbf95-ee0e-4eab-b8e5-82d51eed57d1\",\n" +
+                "  \"PublicKey\": \"MIICIjANBgkqhkiG9w0BAQEF==\",\n" +
+                "  \"CustomerMasterKeySpec\": \"RSA_4096\",\n" +
+                "  \"EncryptionAlgorithms\": [\n" +
+                "    \"RSAES_OAEP_SHA_1\",\n" +
+                "    \"RSAES_OAEP_SHA_256\"\n" +
+                "  ]\n" +
+                "}"
+        private val SSM_MOCK_PARAM: Parameter = Parameter.builder()
+            .name(SSM_PARAM_NAME)
+            .type(ParameterType.STRING)
+            .value(SSM_MOCK_PARAM_VALUE)
+            .build()
+
     }
 }

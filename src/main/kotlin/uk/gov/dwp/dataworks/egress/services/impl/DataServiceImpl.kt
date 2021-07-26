@@ -1,6 +1,7 @@
 package uk.gov.dwp.dataworks.egress.services.impl
 
 import com.amazonaws.services.s3.AmazonS3EncryptionV2
+import com.google.gson.GsonBuilder
 import io.prometheus.client.Counter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.future.await
@@ -11,6 +12,7 @@ import software.amazon.awssdk.core.async.AsyncResponseTransformer
 import software.amazon.awssdk.services.s3.S3AsyncClient
 import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.s3.model.*
+import software.amazon.awssdk.services.ssm.SsmClient
 import uk.gov.dwp.dataworks.egress.domain.EgressSpecification
 import uk.gov.dwp.dataworks.egress.services.CipherService
 import uk.gov.dwp.dataworks.egress.services.CompressionService
@@ -20,13 +22,19 @@ import uk.gov.dwp.dataworks.logging.DataworksLogger
 import java.io.ByteArrayOutputStream
 import java.io.File
 import com.amazonaws.services.s3.model.GetObjectRequest as GetObjectRequestVersion1
+import software.amazon.awssdk.services.ssm.model.GetParameterRequest
+import software.amazon.awssdk.services.ssm.model.SsmException
+import uk.gov.dwp.dataworks.egress.domain.ReWrapKeyParameterStoreResult
+
 
 @Service
 class DataServiceImpl(
     private val s3AsyncClient: S3AsyncClient,
     private val s3Client: S3Client,
+    private val ssmClient: SsmClient,
     private val decryptingS3Client: AmazonS3EncryptionV2,
     private val assumedRoleS3ClientProvider: suspend (String) -> S3AsyncClient,
+    private val assumedRoleSsmClientProvider: suspend (String) -> SsmClient,
     private val dataKeyService: DataKeyService,
     private val cipherService: CipherService,
     private val compressionService: CompressionService,
@@ -43,6 +51,30 @@ class DataServiceImpl(
             .filter { key -> !excludedObjects.any(key::endsWith) }
             .map { key -> egressObject(key, specification) }.all { it }
 
+    private suspend fun fetchReWrappingKeyParameter(specification: EgressSpecification) : Pair<String, String> {
+        try {
+            val ssmClient = rtgSsmClient(specification)
+            val parameterRequest = GetParameterRequest.builder().name(specification.encryptingKeySsmParmName).build()
+            val rtgParameter = ssmClient.getParameter(parameterRequest).parameter().value()
+
+            val gson = GsonBuilder().setLenient().create()
+            val rtgParameterJsonObj = gson.fromJson(rtgParameter, ReWrapKeyParameterStoreResult::class.java)
+            return Pair(rtgParameterJsonObj.KeyId, rtgParameterJsonObj.PublicKey)
+
+
+        } catch (e: SsmException) {
+            logger.error(("Failed to get encrypting key " to "$specification.encryptingKeySsmParmName").toString())
+        } finally {
+            ssmClient.close()
+        }
+        return Pair("","")
+    }
+
+    private fun reWrapDataKey(encryptingKeyId: String?, encryptedKey: String?, reWrappingKey: String):ByteArray  {
+        val decryptedKey = dataKeyService.decryptKey(encryptingKeyId!!, encryptedKey!!)
+        return cipherService.rsaEncrypt(reWrappingKey, decryptedKey.toByteArray())
+    }
+
     private suspend fun egressObject(key: String, specification: EgressSpecification): Boolean =
         try {
             logger.info("Egressing s3 object", "key" to key, "specification" to "$specification")
@@ -57,7 +89,18 @@ class DataServiceImpl(
             when {
                 specification.transferType.equals("S3", true) -> {
                     logger.info("Transferring contents to s3", "specification" to "$specification")
-                    val request = if (wasEncryptedByHtme(metadata) && !specification.decrypt) {
+                    val request = if (wasEncryptedByHtme(metadata) && specification.rewrapDataKey)
+                    {
+                        val(encryptingKeyID, reWrappingKey) = fetchReWrappingKeyParameter(specification)
+                        val reWrappedDataKey = reWrapDataKey(
+                            metadata[ENCRYPTING_KEY_ID_METADATA_KEY],
+                            metadata[CIPHERTEXT_METADATA_KEY],
+                            reWrappingKey
+                        )
+                        putObjectRequestWithReWrappedKeyAsEncryptionMetadata(specification, key, encryptingKeyID,
+                            String(reWrappedDataKey), metadata)
+                    }
+                    else if (wasEncryptedByHtme(metadata) && !specification.decrypt && !specification.rewrapDataKey) {
                         putObjectRequestWithEncryptionMetadata(specification, key, metadata)
                     } else {
                         putObjectRequest(specification, key)
@@ -141,6 +184,27 @@ class DataServiceImpl(
             build()
         }
 
+    private fun putObjectRequestWithReWrappedKeyAsEncryptionMetadata(
+        specification: EgressSpecification,
+        key: String,
+        keyEncryptionKeyId: String,
+        reWrappedDataKey: String,
+        metadata: Map<String, String>
+    ): PutObjectRequest =
+        with(PutObjectRequest.builder()) {
+            bucket(specification.destinationBucket)
+            key(targetKey(specification, key))
+            acl(ObjectCannedACL.BUCKET_OWNER_FULL_CONTROL)
+            metadata(
+                mapOf(
+                    INITIALISATION_VECTOR_METADATA_KEY to metadata[INITIALISATION_VECTOR_METADATA_KEY],
+                    ENCRYPTING_KEY_ID_METADATA_KEY to keyEncryptionKeyId,
+                    CIPHERTEXT_METADATA_KEY to reWrappedDataKey
+                )
+            )
+            build()
+        }
+
     private fun targetKey(
         specification: EgressSpecification,
         key: String
@@ -162,6 +226,13 @@ class DataServiceImpl(
             assumedRoleS3ClientProvider(specification.roleArn)
         } ?: run {
             s3AsyncClient
+        }
+
+    private suspend fun rtgSsmClient(specification: EgressSpecification): SsmClient =
+        specification.roleArn?.let {
+            assumedRoleSsmClientProvider(specification.roleArn)
+        } ?: run {
+            ssmClient
         }
 
     private fun targetContents(

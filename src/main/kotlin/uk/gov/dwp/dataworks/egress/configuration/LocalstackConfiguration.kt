@@ -19,6 +19,7 @@ import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient
 import software.amazon.awssdk.services.s3.S3AsyncClient
 import software.amazon.awssdk.services.s3.S3Client
+import software.amazon.awssdk.services.ssm.SsmClient
 import software.amazon.awssdk.services.sqs.SqsAsyncClient
 import java.net.URI
 import com.amazonaws.client.builder.AwsClientBuilder as AwsClientBuilderV1
@@ -43,6 +44,9 @@ class LocalstackConfiguration(private val encryptionMaterialsProvider: Encryptio
 
     @Bean
     fun sqsClient(): SqsAsyncClient = SqsAsyncClient.builder().localstack()
+
+    @Bean
+    fun ssmClient(): SsmClient = SsmClient.builder().localstack()
 
     @Bean
     fun s3AsyncClient(): S3AsyncClient = S3AsyncClient.builder().localstack()

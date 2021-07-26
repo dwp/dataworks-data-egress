@@ -19,7 +19,6 @@ repositories {
 
 dependencies {
 	annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
-
 	implementation("com.amazonaws:aws-java-sdk-s3:1.12.3")
 	implementation("com.github.dwp:dataworks-common-logging:0.0.6")
 	implementation("com.google.code.gson:gson:2.8.7")
@@ -39,6 +38,7 @@ dependencies {
 	implementation("software.amazon.awssdk:sqs")
 	implementation("software.amazon.awssdk:sts")
 	implementation("software.amazon.awssdk:s3")
+	implementation("software.amazon.awssdk:ssm")
 
 	implementation("io.micrometer:micrometer-core:1.6.4")
 	implementation("io.micrometer:micrometer-registry-prometheus:1.6.4")

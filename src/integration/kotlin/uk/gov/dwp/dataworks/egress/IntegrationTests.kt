@@ -216,8 +216,9 @@ class IntegrationTests: StringSpec() {
     private suspend fun verifyEgress(sourceContents: String,
                                      identifier: String,
                                      decrypt: Boolean = true,
-                                     compressionFormat: String = "") {
-        insertEgressItem("$identifier/", "$identifier/", TRANSFER_TYPE, decrypt, compressionFormat)
+                                     compressionFormat: String = "", rewrapDatakey: Boolean = false,
+                                     ssmParamName: String = "") {
+        insertEgressItem("$identifier/", "$identifier/", TRANSFER_TYPE, decrypt, compressionFormat,rewrapDatakey, ssmParamName)
         val message = messageBody("$identifier/$PIPELINE_SUCCESS_FLAG")
         val request = sendMessageRequest(message)
         sqs.sendMessage(request).await()
@@ -294,7 +295,8 @@ class IntegrationTests: StringSpec() {
 
     private suspend fun insertEgressItem(sourcePrefix: String, destinationPrefix: String,
                                          transferType: String, decrypt: Boolean = false,
-                                         compressionFormat: String = ""): PutItemResponse {
+                                         compressionFormat: String = "", rewrapDatakey: Boolean = false,
+                                         ssmParamName: String = ""): PutItemResponse {
         val baseRecord = mapOf<String, AttributeValue>(
             egressColumn(SOURCE_BUCKET_FIELD_NAME, SOURCE_BUCKET),
             egressColumn(DESTINATION_BUCKET_FIELD_NAME, DESTINATION_BUCKET),
@@ -315,9 +317,19 @@ class IntegrationTests: StringSpec() {
             r + Pair(DECRYPT_FIELD_NAME, AttributeValue.builder().bool(true).build())
         } ?: withOptionalCompressionFields
 
+        val withOptionalDataKeyReWrapField = withOptionalDecryptField.takeIf { rewrapDatakey }?.let { r ->
+            r + Pair(REWRAP_DATAKEY_FIELD_NAME, AttributeValue.builder().bool(true).build())
+        } ?: withOptionalDecryptField
+
+        val withOptionalSsmParamField = withOptionalDataKeyReWrapField.takeIf { decrypt }?.let { r ->
+            ssmParamName.takeIf(String::isNotBlank)?.let { paramName ->
+                r + egressColumn(ENCRYPTIING_KEY_SSM_PARAM_NAME_FIELD_NAME, paramName)
+            }
+        } ?: withOptionalDataKeyReWrapField
+
         val request = with(PutItemRequest.builder()) {
             tableName(EGRESS_TABLE)
-            item(withOptionalDecryptField)
+            item(withOptionalSsmParamField)
             build()
         }
         return dynamoDb.putItem(request).await()
@@ -353,6 +365,9 @@ class IntegrationTests: StringSpec() {
         private const val COMPRESSION_FORMAT_FIELD_NAME = "compress_fmt"
         private const val COMPRESS_FIELD_NAME = "compress"
         private const val DECRYPT_FIELD_NAME = "decrypt"
+        private const val REWRAP_DATAKEY_FIELD_NAME: String = "rewrap_datakey"
+        private const val ENCRYPTIING_KEY_SSM_PARAM_NAME_FIELD_NAME: String = "encrypting_key_ssm_parm_name"
+
 
         private val applicationContext by lazy {
             AnnotationConfigApplicationContext(TestConfiguration::class.java)

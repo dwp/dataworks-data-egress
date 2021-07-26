@@ -111,11 +111,13 @@ class DbServiceImplTest : WordSpec() {
         DESTINATION_PREFIX,
         TRANSFER_TYPE,
         false,
-        false,
-        null,
-        null,
-        PIPELINE_NAME,
-        RECIPIENT
+        rewrapDataKey = REWRAP_DATAKEY,
+        encryptingKeySsmParmName = ENCRYPTIING_KEY_SSM_PARAM_NAME,
+        compress = false,
+        compressionFormat = null,
+        roleArn = null,
+        pipelineName = PIPELINE_NAME,
+        recipient = RECIPIENT
 
 
     )
@@ -127,7 +129,9 @@ class DbServiceImplTest : WordSpec() {
         DESTINATION_BUCKET_KEY to attributeValue(DESTINATION_BUCKET),
         TRANSFER_TYPE_KEY to attributeValue(TRANSFER_TYPE),
         PIPELINE_NAME_KEY to attributeValue(PIPELINE_NAME),
-        RECIPIENT_KEY to attributeValue(RECIPIENT)
+        RECIPIENT_KEY to attributeValue(RECIPIENT),
+        REWRAP_DATAKEY_KEY to attributeValue(REWRAP_DATAKEY.toString()),
+        ENCRYPTIING_KEY_SSM_PARAM_NAME_KEY to attributeValue(ENCRYPTIING_KEY_SSM_PARAM_NAME)
     ).toMutableMap()
 
 
@@ -144,6 +148,8 @@ class DbServiceImplTest : WordSpec() {
         private const val TODAYS_DATE_PLACEHOLDER = "\$TODAYS_DATE"
         private const val PIPELINE_NAME_KEY = "pipeline_name"
         private const val RECIPIENT_KEY = "recipient_name"
+        private const val REWRAP_DATAKEY_KEY: String = "rewrap_datakey"
+        private const val ENCRYPTIING_KEY_SSM_PARAM_NAME_KEY: String = "encrypting_key_ssm_parm_name"
 
         private const val SOURCE_BUCKET = "source"
         private const val DESTINATION_BUCKET = "destination"
@@ -152,5 +158,8 @@ class DbServiceImplTest : WordSpec() {
         private const val LAST_EVALUATED_KEY = "LAST_EVALUATED_KEY"
         private const val PIPELINE_NAME = "pipeline"
         private const val RECIPIENT = "recipient"
+        private const val REWRAP_DATAKEY = false
+        private const val ENCRYPTIING_KEY_SSM_PARAM_NAME: String = "rtg_public"
+
     }
 }
