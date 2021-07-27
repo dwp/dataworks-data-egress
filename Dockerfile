@@ -48,11 +48,8 @@ COPY --from=build /build/dataworks-data-egress.jar .
 COPY ./dataworks-data-egress-keystore.jks ./development-keystore.jks
 COPY ./dataworks-data-egress-truststore.jks ./development-truststore.jks
 
-RUN mkdir /data-egress
-
 RUN chown -R $USER_NAME.$GROUP_NAME /dataworks-data-egress
 RUN chmod -R a+rwx /etc/ssl/
-RUN chmod -R a+rwx /data-egress
 RUN chmod -R a+rwx /usr/local/share/ca-certificates/
 
 USER $USER_NAME
