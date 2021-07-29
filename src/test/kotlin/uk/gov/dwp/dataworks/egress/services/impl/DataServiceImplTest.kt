@@ -138,7 +138,7 @@ class DataServiceImplTest : WordSpec() {
                             mapOf(
                                 ENCRYPTING_KEY_ID_METADATA_KEY to ENCRYPTING_KEY_ID_METADATA_VALUE,
                                 INITIALISATION_VECTOR_METADATA_KEY to INITIALISATION_VECTOR_METADATA_VALUE,
-                                CIPHERTEXT_METADATA_KEY to CIPHERTEXT_METADATA_VALUE
+                                CIPHERTEXT_METADATA_KEY to CIPHERTEXT_METADATA_VALUE,
                             )
                         )
                         build()
@@ -163,7 +163,9 @@ class DataServiceImplTest : WordSpec() {
                     with(GetObjectResponse.builder()) {
                         metadata(mapOf(ENCRYPTING_KEY_ID_METADATA_KEY to ENCRYPTING_KEY_ID_METADATA_VALUE,
                             INITIALISATION_VECTOR_METADATA_KEY to INITIALISATION_VECTOR_METADATA_VALUE,
-                            CIPHERTEXT_METADATA_KEY to CIPHERTEXT_METADATA_VALUE))
+                            CIPHERTEXT_METADATA_KEY to CIPHERTEXT_METADATA_VALUE,
+                            DATA_PRODUCT to "product",
+                            DATA_PRODUCT_TYPE to "productType"))
                         build()
                     }
                 }.map {
@@ -647,6 +649,8 @@ class DataServiceImplTest : WordSpec() {
         private const val ENCRYPTING_KEY_ID_METADATA_KEY = "datakeyencryptionkeyid"
         private const val INITIALISATION_VECTOR_METADATA_KEY = "iv"
         private const val CIPHERTEXT_METADATA_KEY = "ciphertext"
+        private const val DATA_PRODUCT = "data_product"
+        private const val DATA_PRODUCT_TYPE= "data_product_type"
 
         private const val MATERIALS_DESCRIPTION_METADATA_KEY = "x-amz-matdesc"
         private const val ENCRYPTING_KEY_ID_METADATA_VALUE = "KEY_ID"
