@@ -78,6 +78,7 @@ class DataServiceImpl(
     private suspend fun egressObject(key: String, specification: EgressSpecification): Boolean =
         try {
             logger.info("Egressing s3 object", "key" to key, "specification" to "$specification")
+            //Gets source object
             val metadata = objectMetadata(specification.sourceBucket, key)
             logger.info("Got metadata", "metadata" to "$metadata")
             logger.info("Getting source contents", "specification" to "$specification")
@@ -114,6 +115,7 @@ class DataServiceImpl(
                         specification.transferType
                     ).inc()
                     logger.info("Transferred contents to s3", "key" to key, "specification" to "$specification")
+                    logger.info("Check metadata", "metadata" to "$request")
                     true
                 }
                 specification.transferType.equals("SFT", true) -> {
@@ -146,14 +148,12 @@ class DataServiceImpl(
             false
         }
 
-
     private fun listObjectsRequest(specification: EgressSpecification): ListObjectsV2Request =
         with(ListObjectsV2Request.builder()) {
             bucket(specification.sourceBucket)
             prefix(specification.sourcePrefix)
             build()
         }
-
 
     private fun putObjectRequest(
         specification: EgressSpecification,
@@ -178,7 +178,9 @@ class DataServiceImpl(
                 mapOf(
                     INITIALISATION_VECTOR_METADATA_KEY to metadata[INITIALISATION_VECTOR_METADATA_KEY],
                     ENCRYPTING_KEY_ID_METADATA_KEY to metadata[ENCRYPTING_KEY_ID_METADATA_KEY],
-                    CIPHERTEXT_METADATA_KEY to metadata[CIPHERTEXT_METADATA_KEY]
+                    CIPHERTEXT_METADATA_KEY to metadata[CIPHERTEXT_METADATA_KEY],
+                    DATA_PRODUCT to sendMetadata(metadata[DATA_PRODUCT]),
+                    DATA_PRODUCT_TYPE to sendMetadata(metadata[DATA_PRODUCT_TYPE])
                 )
             )
             build()
@@ -199,7 +201,9 @@ class DataServiceImpl(
                 mapOf(
                     INITIALISATION_VECTOR_METADATA_KEY to metadata[INITIALISATION_VECTOR_METADATA_KEY],
                     ENCRYPTING_KEY_ID_METADATA_KEY to keyEncryptionKeyId,
-                    CIPHERTEXT_METADATA_KEY to reWrappedDataKey
+                    CIPHERTEXT_METADATA_KEY to reWrappedDataKey,
+                    DATA_PRODUCT to sendMetadata(metadata[DATA_PRODUCT]),
+                    DATA_PRODUCT_TYPE to sendMetadata(metadata[DATA_PRODUCT_TYPE]),
                 )
             )
             build()
@@ -304,7 +308,6 @@ class DataServiceImpl(
             cipherService.decrypt(decryptedKey, iv!!, asByteArray())
         }
 
-
     private suspend fun unencryptedObjectContents(bucket: String, key: String): ByteArray =
         s3AsyncClient.getObject(getObjectRequest(bucket, key), AsyncResponseTransformer.toBytes()).await().asByteArray()
 
@@ -344,12 +347,21 @@ class DataServiceImpl(
             file.writeBytes(targetContents)
         }
 
+    private fun sendMetadata(metadata: String?):String {
+        if(metadata != null){
+            return metadata;
+        }
+        return "";
+    }
+
     companion object {
         private val logger = DataworksLogger.getLogger(DataServiceImpl::class)
         private const val MATERIALS_DESCRIPTION_METADATA_KEY = "x-amz-matdesc"
         private const val ENCRYPTING_KEY_ID_METADATA_KEY = "datakeyencryptionkeyid"
         private const val INITIALISATION_VECTOR_METADATA_KEY = "iv"
         private const val CIPHERTEXT_METADATA_KEY = "ciphertext"
+        private const val DATA_PRODUCT = "data_product"
+        private const val DATA_PRODUCT_TYPE= "data_product_type"
         private val excludedObjects = listOf("pipeline_success.flag")
     }
 }
