@@ -55,4 +55,4 @@ RUN chmod -R a+rwx /usr/local/share/ca-certificates/
 USER $USER_NAME
 
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["java", "-Xmx2g", "-jar", "dataworks-data-egress.jar"]
+CMD ["java", "-Xmx6g", "-jar", "dataworks-data-egress.jar"]
