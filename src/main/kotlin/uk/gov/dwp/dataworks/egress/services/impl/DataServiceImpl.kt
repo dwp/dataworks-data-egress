@@ -93,13 +93,13 @@ class DataServiceImpl(
                     val request = if (wasEncryptedByHtme(metadata) && specification.rewrapDataKey)
                     {
                         val(encryptingKeyID, reWrappingKey) = fetchReWrappingKeyParameter(specification)
-                        logger.info("ReWrapping public Key received", "key" to "$reWrappingKey")
+                        logger.info("ReWrapping public Key received", "public" to "PUBLIC")
                         val reWrappedDataKey = reWrapDataKey(
                             metadata[ENCRYPTING_KEY_ID_METADATA_KEY],
                             metadata[CIPHERTEXT_METADATA_KEY],
                             reWrappingKey
                         )
-                        logger.info("ReWrapped data key received", "data-key" to "$reWrappedDataKey")
+                        logger.info("ReWrapped data key received", "datak" to "DATAKEY")
                         putObjectRequestWithReWrappedKeyAsEncryptionMetadata(specification, key, encryptingKeyID,
                             String(reWrappedDataKey), metadata)
                     }
