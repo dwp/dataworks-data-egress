@@ -19,7 +19,7 @@ repositories {
 
 dependencies {
 	annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
-	implementation("com.amazonaws:aws-java-sdk-s3:1.12.3")
+	implementation("com.amazonaws:aws-java-sdk-s3")
 	implementation("com.github.dwp:dataworks-common-logging:0.0.6")
 	implementation("com.google.code.gson:gson:2.8.7")
 	implementation("org.bouncycastle:bcprov-ext-jdk15on:1.69")
