@@ -93,11 +93,13 @@ class DataServiceImpl(
                     val request = if (wasEncryptedByHtme(metadata) && specification.rewrapDataKey)
                     {
                         val(encryptingKeyID, reWrappingKey) = fetchReWrappingKeyParameter(specification)
+                        logger.info("ReWrapping public Key received", "key" to "$reWrappingKey")
                         val reWrappedDataKey = reWrapDataKey(
                             metadata[ENCRYPTING_KEY_ID_METADATA_KEY],
                             metadata[CIPHERTEXT_METADATA_KEY],
                             reWrappingKey
                         )
+                        logger.info("ReWrapped data key received", "data-key" to "$reWrappedDataKey")
                         putObjectRequestWithReWrappedKeyAsEncryptionMetadata(specification, key, encryptingKeyID,
                             String(reWrappedDataKey), metadata)
                     }
@@ -197,15 +199,15 @@ class DataServiceImpl(
             bucket(specification.destinationBucket)
             key(targetKey(specification, key))
             acl(ObjectCannedACL.BUCKET_OWNER_FULL_CONTROL)
-            metadata(
-                mapOf(
-                    INITIALISATION_VECTOR_METADATA_KEY to metadata[INITIALISATION_VECTOR_METADATA_KEY],
-                    ENCRYPTING_KEY_ID_METADATA_KEY to keyEncryptionKeyId,
-                    CIPHERTEXT_METADATA_KEY to reWrappedDataKey,
-                    DATA_PRODUCT to sendMetadata(metadata[DATA_PRODUCT]),
-                    DATA_PRODUCT_TYPE to sendMetadata(metadata[DATA_PRODUCT_TYPE]),
-                )
-            )
+//            metadata(
+//                mapOf(
+//                    INITIALISATION_VECTOR_METADATA_KEY to metadata[INITIALISATION_VECTOR_METADATA_KEY],
+//                    ENCRYPTING_KEY_ID_METADATA_KEY to keyEncryptionKeyId,
+//                    CIPHERTEXT_METADATA_KEY to reWrappedDataKey,
+//                    DATA_PRODUCT to sendMetadata(metadata[DATA_PRODUCT]),
+//                    DATA_PRODUCT_TYPE to sendMetadata(metadata[DATA_PRODUCT_TYPE]),
+//                )
+//            )
             build()
         }
 
