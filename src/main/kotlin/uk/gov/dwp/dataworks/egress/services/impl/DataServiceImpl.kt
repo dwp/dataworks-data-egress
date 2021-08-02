@@ -199,15 +199,15 @@ class DataServiceImpl(
             bucket(specification.destinationBucket)
             key(targetKey(specification, key))
             acl(ObjectCannedACL.BUCKET_OWNER_FULL_CONTROL)
-//            metadata(
-//                mapOf(
-//                    INITIALISATION_VECTOR_METADATA_KEY to metadata[INITIALISATION_VECTOR_METADATA_KEY],
-//                    ENCRYPTING_KEY_ID_METADATA_KEY to keyEncryptionKeyId,
-//                    CIPHERTEXT_METADATA_KEY to reWrappedDataKey,
-//                    DATA_PRODUCT to sendMetadata(metadata[DATA_PRODUCT]),
-//                    DATA_PRODUCT_TYPE to sendMetadata(metadata[DATA_PRODUCT_TYPE]),
-//                )
-//            )
+            metadata(
+                mapOf(
+                    INITIALISATION_VECTOR_METADATA_KEY to metadata[INITIALISATION_VECTOR_METADATA_KEY],
+                    ENCRYPTING_KEY_ID_METADATA_KEY to keyEncryptionKeyId,
+                    CIPHERTEXT_METADATA_KEY to reWrappedDataKey,
+                    DATA_PRODUCT to sendMetadata(metadata[DATA_PRODUCT]),
+                    DATA_PRODUCT_TYPE to sendMetadata(metadata[DATA_PRODUCT_TYPE]),
+                )
+            )
             build()
         }
 
