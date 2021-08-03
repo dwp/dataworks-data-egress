@@ -195,7 +195,7 @@ class DataServiceImplTest : WordSpec() {
                 }
                 val cipherService = mock<CipherService> {
                     on { decrypt(any(), any(), any()) } doReturn "DECRYPTED_CONTENTS".toByteArray()
-                    on { rsaEncrypt(any(), any()) } doReturn "RSA_ENCRYPTED".toByteArray()
+                    on { rsaEncrypt(any(), any()) } doReturn "RSA_ENCRYPTED"
                 }
 
                 val compressionService = mock<CompressionService> {

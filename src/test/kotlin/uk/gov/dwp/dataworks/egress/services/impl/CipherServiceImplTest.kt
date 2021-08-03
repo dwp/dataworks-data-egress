@@ -41,8 +41,8 @@ class CipherServiceImplTest: StringSpec() {
         "Decrypting RSA encrypted key should give plain text key" {
             val cipherService = CipherServiceImpl(SecureRandom.getInstance("SHA1PRNG"), CIPHER_TRANSFORMATION_RSA)
             val encryptedKey  = cipherService.rsaEncrypt(rsaPublicKey, DATA_KEY.toByteArray())
-            val decryptedKey  = String(cipherService.rsaDecrypt(rsaPrivateKey, encryptedKey))
-            decryptedKey shouldBe DATA_KEY
+            val decryptedKey  = cipherService.rsaDecrypt(rsaPrivateKey, Base64.getDecoder().decode(encryptedKey))
+            decryptedKey shouldBe DATA_KEY.toByteArray()
         }
     }
 

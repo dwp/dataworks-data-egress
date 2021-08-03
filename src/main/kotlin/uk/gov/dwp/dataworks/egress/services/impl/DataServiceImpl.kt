@@ -70,7 +70,7 @@ class DataServiceImpl(
         return Pair("","")
     }
 
-    private fun reWrapDataKey(encryptingKeyId: String?, encryptedKey: String?, reWrappingKey: String):ByteArray  {
+    private fun reWrapDataKey(encryptingKeyId: String?, encryptedKey: String?, reWrappingKey: String):String  {
         val decryptedKey = dataKeyService.decryptKey(encryptingKeyId!!, encryptedKey!!)
         return cipherService.rsaEncrypt(reWrappingKey, decryptedKey.toByteArray())
     }
@@ -93,15 +93,15 @@ class DataServiceImpl(
                     val request = if (wasEncryptedByHtme(metadata) && specification.rewrapDataKey)
                     {
                         val(encryptingKeyID, reWrappingKey) = fetchReWrappingKeyParameter(specification)
-                        logger.info("ReWrapping .....", "public" to "PUBLIC")
+                        logger.info("ReWrapping .....", "public  key" to "$reWrappingKey")
                         val reWrappedDataKey = reWrapDataKey(
                             metadata[ENCRYPTING_KEY_ID_METADATA_KEY],
                             metadata[CIPHERTEXT_METADATA_KEY],
                             reWrappingKey
                         )
-                        logger.info("ReWrapped ......", "datak" to "DATAK")
+                        logger.info("ReWrapped .....", "datakey" to "$reWrappedDataKey")
                         putObjectRequestWithReWrappedKeyAsEncryptionMetadata(specification, key, encryptingKeyID,
-                            String(reWrappedDataKey), metadata)
+                            reWrappedDataKey, metadata)
                     }
                     else if (wasEncryptedByHtme(metadata) && !specification.decrypt && !specification.rewrapDataKey) {
                         putObjectRequestWithEncryptionMetadata(specification, key, metadata)
@@ -203,7 +203,7 @@ class DataServiceImpl(
                 mapOf(
                     INITIALISATION_VECTOR_METADATA_KEY to metadata[INITIALISATION_VECTOR_METADATA_KEY],
                     ENCRYPTING_KEY_ID_METADATA_KEY to keyEncryptionKeyId,
-                    CIPHERTEXT_METADATA_KEY to reWrappedDataKey?.let{ "reWrappedDataKey"},
+                    CIPHERTEXT_METADATA_KEY to reWrappedDataKey,
                     DATA_PRODUCT to sendMetadata(metadata[DATA_PRODUCT]),
                     DATA_PRODUCT_TYPE to sendMetadata(metadata[DATA_PRODUCT_TYPE])
                  )

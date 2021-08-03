@@ -39,7 +39,7 @@ class CipherServiceImpl(private val secureRandom: SecureRandom,
         return cipher.doFinal(encrypted)
     }
 
-    override fun rsaEncrypt(key: String, plaintext: ByteArray): ByteArray {
+    override fun rsaEncrypt(key: String, plaintext: ByteArray): String {
         val algorithm = "RSA/ECB/OAEPWITHSHA-256ANDMGF1PADDING"
         val keySpec = X509EncodedKeySpec(Base64.getDecoder().decode(key))
         val kf = KeyFactory.getInstance("RSA")
@@ -47,7 +47,7 @@ class CipherServiceImpl(private val secureRandom: SecureRandom,
 
         val cipher = Cipher.getInstance(algorithm)
         cipher.init(Cipher.ENCRYPT_MODE, publicKey)
-        return cipher.doFinal(plaintext)
+        return Base64.getEncoder().encodeToString(cipher.doFinal(plaintext))
     }
 
     override fun rsaDecrypt(key: String, encrypted: ByteArray): ByteArray {
