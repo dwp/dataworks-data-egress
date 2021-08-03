@@ -206,7 +206,7 @@ class DataServiceImpl(
                     CIPHERTEXT_METADATA_KEY to "reWrappedDataKey",
                     DATA_PRODUCT to sendMetadata(metadata[DATA_PRODUCT]),
                     DATA_PRODUCT_TYPE to sendMetadata(metadata[DATA_PRODUCT_TYPE])
-                )
+                 )
             )
             build()
         }
