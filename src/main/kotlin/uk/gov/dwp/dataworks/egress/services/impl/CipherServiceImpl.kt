@@ -30,8 +30,7 @@ class CipherServiceImpl(private val secureRandom: SecureRandom,
         val initialisationVector = ByteArray(16).apply { secureRandom.nextBytes(this) }
         val keySpec: Key = SecretKeySpec(Base64.getDecoder().decode(key), "AES")
         val cipher = encryptingCipher(keySpec, initialisationVector)
-        val iv = Base64.getEncoder().encodeToString(initialisationVector)
-        return EncryptionResult(iv, cipher.doFinal(plaintext))
+        return EncryptionResult(Base64.getEncoder().encodeToString(initialisationVector), cipher.doFinal(plaintext))
     }
 
     override fun decrypt(key: String, initializationVector: String, encrypted: ByteArray): ByteArray {
@@ -48,8 +47,7 @@ class CipherServiceImpl(private val secureRandom: SecureRandom,
 
         val cipher = Cipher.getInstance(algorithm)
         cipher.init(Cipher.ENCRYPT_MODE, publicKey)
-        val ciphertext = cipher.doFinal(plaintext)
-        return Base64.getEncoder().encodeToString(ciphertext)
+        return Base64.getEncoder().encodeToString(cipher.doFinal(plaintext))
     }
 
     override fun rsaDecrypt(key: String, encrypted: ByteArray): ByteArray {
