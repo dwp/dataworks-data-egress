@@ -13,7 +13,10 @@ import software.amazon.awssdk.services.s3.S3AsyncClient
 import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.s3.model.*
 import software.amazon.awssdk.services.ssm.SsmClient
+import software.amazon.awssdk.services.ssm.model.GetParameterRequest
+import software.amazon.awssdk.services.ssm.model.SsmException
 import uk.gov.dwp.dataworks.egress.domain.EgressSpecification
+import uk.gov.dwp.dataworks.egress.domain.ReWrapKeyParameterStoreResult
 import uk.gov.dwp.dataworks.egress.services.CipherService
 import uk.gov.dwp.dataworks.egress.services.CompressionService
 import uk.gov.dwp.dataworks.egress.services.DataKeyService
@@ -22,9 +25,6 @@ import uk.gov.dwp.dataworks.logging.DataworksLogger
 import java.io.ByteArrayOutputStream
 import java.io.File
 import com.amazonaws.services.s3.model.GetObjectRequest as GetObjectRequestVersion1
-import software.amazon.awssdk.services.ssm.model.GetParameterRequest
-import software.amazon.awssdk.services.ssm.model.SsmException
-import uk.gov.dwp.dataworks.egress.domain.ReWrapKeyParameterStoreResult
 
 
 @Service
@@ -332,22 +332,21 @@ class DataServiceImpl(
             build()
         }
 
-    private suspend fun writeToFile(fileName: String, folder: String, targetContents: ByteArray) =
-        withContext(Dispatchers.IO) {
-            val parent = File(if (folder.startsWith("/")) folder else "/$folder")
+    private fun writeToFile(fileName: String, folder: String, targetContents: ByteArray) {
+        val parent = File(if (folder.startsWith("/")) folder else "/$folder")
 
-            if (!parent.isDirectory) {
-                logger.info("Making parent directory", "parent" to "$parent", "filename" to fileName)
-                if (!parent.mkdirs()) {
-                    logger.error("Failed to make parent directories", "parent" to "$parent", "filename" to fileName)
-                    throw RuntimeException("Failed to make parent directories, parent: '$parent', filename: '$fileName'")
-                }
+        if (!parent.isDirectory) {
+            logger.info("Making parent directory", "parent" to "$parent", "filename" to fileName)
+            if (!parent.mkdirs()) {
+                logger.error("Failed to make parent directories", "parent" to "$parent", "filename" to fileName)
+                throw RuntimeException("Failed to make parent directories, parent: '$parent', filename: '$fileName'")
             }
-
-            val file = File(parent, fileName)
-            logger.info("Writing file", "file" to "$file", "parent" to "$parent", "filename" to fileName)
-            file.writeBytes(targetContents)
         }
+
+        val file = File(parent, fileName)
+        logger.info("Writing file", "file" to "$file", "parent" to "$parent", "filename" to fileName)
+        file.writeBytes(targetContents)
+    }
 
     private fun sendMetadata(metadata: String?):String {
         if(metadata != null){
