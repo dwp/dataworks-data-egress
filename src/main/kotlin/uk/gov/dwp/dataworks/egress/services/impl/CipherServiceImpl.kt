@@ -45,7 +45,7 @@ class CipherServiceImpl(private val secureRandom: SecureRandom,
         val kf = KeyFactory.getInstance("RSA")
         val publicKey: RSAPublicKey = kf.generatePublic(keySpec) as RSAPublicKey
 
-        val cipher = Cipher.getInstance(algorithm)
+        val cipher = Cipher.getInstance(algorithm, "BC")
         cipher.init(Cipher.ENCRYPT_MODE, publicKey)
         return cipher.doFinal(plaintext)
     }
@@ -55,10 +55,9 @@ class CipherServiceImpl(private val secureRandom: SecureRandom,
         val kf = KeyFactory.getInstance("RSA")
         val privateKey: RSAPrivateKey = kf.generatePrivate(keySpec) as RSAPrivateKey
 
-        val algorithm = "RSA/ECB/OAEPPadding"
-        val cipher = Cipher.getInstance(algorithm)
-        val oaepParams = OAEPParameterSpec("SHA-256", "MGF1", MGF1ParameterSpec("SHA-1"), PSpecified.DEFAULT)
-        cipher.init(Cipher.DECRYPT_MODE, privateKey,oaepParams)
+        val algorithm = "RSA/ECB/OAEPWITHSHA-256ANDMGF1PADDING"
+        val cipher = Cipher.getInstance(algorithm, "BC")
+        cipher.init(Cipher.DECRYPT_MODE, privateKey)
         return cipher.doFinal(encrypted)
 
     }
