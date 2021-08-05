@@ -101,14 +101,33 @@ class DbServiceImplTest : WordSpec() {
                 val entries = dbService.tableEntryMatches(receivedPrefix)
                 entries shouldContainExactly listOf(egressSpecification("$interpolatedPrefix/"))
             }
+            "match destination prefix with yyyyMMdd date format" {
+                val interpolatedPrefix = "source/prefix/${todaysDate()}/collection"
+                val receivedPrefix = "$interpolatedPrefix/pipeline_success.flag"
+                val matchingSourcePrefix = "source/prefix/$TODAYS_DATE_PLACEHOLDER/collection/"
+                val matchingDestinationPrefix = "destination/prefix/${todaysDate("yyyyMMdd")}"
+
+                val matchingItem = egressTableItem(matchingSourcePrefix,DESTINATION_PREFIX+"/"+TODAYS_YYYYMMDD_FORMATED_DATE_PLACEHOLDER)
+                val scanResponse = with(ScanResponse.builder()) {
+                    items(matchingItem)
+                    build()
+                }
+                val scanFuture = CompletableFuture.completedFuture(scanResponse)
+                val dynamoDb = mock<DynamoDbAsyncClient> {
+                    on { scan(any<ScanRequest>()) } doReturn scanFuture
+                }
+                val dbService = DbServiceImpl(dynamoDb, DATA_EGRESS_TABLE)
+                val entries = dbService.tableEntryMatches(receivedPrefix)
+                entries shouldContainExactly listOf(egressSpecification("$interpolatedPrefix/","$matchingDestinationPrefix"))
+            }
         }
     }
 
-    private fun egressSpecification(matchingPrefix: String) = EgressSpecification(
+    private fun egressSpecification(sourcePrefix: String, destinationPrefix:String = DESTINATION_PREFIX) = EgressSpecification(
         SOURCE_BUCKET,
-        matchingPrefix,
+        sourcePrefix,
         DESTINATION_BUCKET,
-        DESTINATION_PREFIX,
+        destinationPrefix,
         TRANSFER_TYPE,
         false,
         rewrapDataKey = REWRAP_DATAKEY,
@@ -122,9 +141,9 @@ class DbServiceImplTest : WordSpec() {
 
     )
 
-    private fun egressTableItem(matchingPrefix: String) = mapOf(
-        SOURCE_PREFIX_KEY to attributeValue(matchingPrefix),
-        DESTINATION_PREFIX_KEY to attributeValue(DESTINATION_PREFIX),
+    private fun egressTableItem(sourcePrefix: String, destinationPrefix: String = DESTINATION_PREFIX) = mapOf(
+        SOURCE_PREFIX_KEY to attributeValue(sourcePrefix),
+        DESTINATION_PREFIX_KEY to attributeValue(destinationPrefix),
         SOURCE_BUCKET_KEY to attributeValue(SOURCE_BUCKET),
         DESTINATION_BUCKET_KEY to attributeValue(DESTINATION_BUCKET),
         TRANSFER_TYPE_KEY to attributeValue(TRANSFER_TYPE),
@@ -137,7 +156,7 @@ class DbServiceImplTest : WordSpec() {
 
     companion object {
         private fun attributeValue(matchingPrefix: String) = AttributeValue.builder().s(matchingPrefix).build()
-        private fun todaysDate() = SimpleDateFormat("yyyy-MM-dd").format(Date())
+        private fun todaysDate(dateFormat:String ="yyyy-MM-dd") = SimpleDateFormat(dateFormat).format(Date())
 
         private const val DATA_EGRESS_TABLE = "DATA_EGRESS_TABLE"
         private const val SOURCE_PREFIX_KEY: String = "source_prefix"
@@ -145,6 +164,7 @@ class DbServiceImplTest : WordSpec() {
         private const val DESTINATION_BUCKET_KEY: String = "destination_bucket"
         private const val DESTINATION_PREFIX_KEY: String = "destination_prefix"
         private const val TRANSFER_TYPE_KEY: String = "transfer_type"
+        private const val TODAYS_YYYYMMDD_FORMATED_DATE_PLACEHOLDER = "\$TODAYS_YYYYMMDD_FORMATED_DATE"
         private const val TODAYS_DATE_PLACEHOLDER = "\$TODAYS_DATE"
         private const val PIPELINE_NAME_KEY = "pipeline_name"
         private const val RECIPIENT_KEY = "recipient_name"

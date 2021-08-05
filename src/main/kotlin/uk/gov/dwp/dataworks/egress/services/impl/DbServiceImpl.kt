@@ -31,7 +31,7 @@ class DbServiceImpl(private val dynamoDb: DynamoDbAsyncClient,
                 todaysDate()).replace(Regex("""\*$"""), ""),
             destinationBucket = attributeStringValue(dynamoDbRecord, DESTINATION_BUCKET_COLUMN),
             destinationPrefix = attributeStringValue(dynamoDbRecord, DESTINATION_PREFIX_COLUMN).replace(TODAYS_DATE_PLACEHOLDER,
-                todaysDate()),
+                todaysDate()).replace(TODAYS_YYYYMMDD_FORMATED_DATE_PLACEHOLDER, todaysDate("yyyyMMdd")),
             transferType = attributeStringValue(dynamoDbRecord, TRANSFER_TYPE_COLUMN),
             decrypt = dynamoDbRecord[DECRYPT_COLUMN]?.bool() ?: false,
             rewrapDataKey = dynamoDbRecord[REWRAP_DATAKEY_COLUMN]?.bool() ?: false,
@@ -42,7 +42,6 @@ class DbServiceImpl(private val dynamoDb: DynamoDbAsyncClient,
             pipelineName = attributeStringValue(dynamoDbRecord, PIPELINE_COLUMN),
             recipient = attributeStringValue(dynamoDbRecord, RECIPIENT_COLUMN)
         )
-
 
     private suspend fun entries(): Flow<List<Map<String, AttributeValue>>> =
         flow { entriesEmitter(this) }
@@ -69,7 +68,7 @@ class DbServiceImpl(private val dynamoDb: DynamoDbAsyncClient,
         }
 
     private fun attributeStringValue(it: Map<String, AttributeValue>, key: String) = it[key]?.s() ?: ""
-    private fun todaysDate() = SimpleDateFormat("yyyy-MM-dd").format(Date())
+    private fun todaysDate(dateFormat:String = "yyyy-MM-dd") = SimpleDateFormat(dateFormat).format(Date())
 
     companion object {
         private const val SOURCE_PREFIX_COLUMN: String = "source_prefix"
@@ -84,6 +83,7 @@ class DbServiceImpl(private val dynamoDb: DynamoDbAsyncClient,
         private const val COMPRESSION_FORMAT_COLUMN: String = "compress_fmt"
         private const val ROLE_ARN_COLUMN: String = "role_arn"
         private const val TODAYS_DATE_PLACEHOLDER = "\$TODAYS_DATE"
+        private const val TODAYS_YYYYMMDD_FORMATED_DATE_PLACEHOLDER = "\$TODAYS_YYYYMMDD_FORMATED_DATE"
         private const val PIPELINE_COLUMN = "pipeline_name"
         private const val RECIPIENT_COLUMN = "recipient_name"
     }
