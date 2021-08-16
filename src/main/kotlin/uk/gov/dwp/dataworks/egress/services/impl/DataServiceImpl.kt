@@ -43,7 +43,11 @@ class DataServiceImpl(
 ) : DataService {
 
     override suspend fun egressObjects(specifications: List<EgressSpecification>): Boolean =
-        specifications.map { specification -> egressObjects(specification) }.all { it }
+        try {specifications.map { specification -> egressObjects(specification) }.all { it }}
+        finally {
+            s3Client.close()
+            s3AsyncClient.close()
+        }
 
     override suspend fun egressObjects(specification: EgressSpecification): Boolean =
         s3AsyncClient.listObjectsV2(listObjectsRequest(specification)).await().contents()
