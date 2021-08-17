@@ -34,7 +34,8 @@ class CipherServiceImplTest: StringSpec() {
             val (initialisationVector, encrypted) = cipherService.encrypt(DATA_KEY, original.toByteArray())
             val firstChar = initialisationVector[0]
             val decrypted =
-                cipherService.decrypt(DATA_KEY, initialisationVector.replace(firstChar, firstChar + 1), encrypted)
+                cipherService.decrypt(DATA_KEY,
+                    initialisationVector.replace(firstChar, if (firstChar == 'Z') 'Y' else 'Z'), encrypted)
             decrypted shouldNotBe original
         }
 

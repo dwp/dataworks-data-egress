@@ -322,7 +322,9 @@ class DataServiceImpl(
 
     private suspend fun objectMetadata(bucket: String, key: String) =
         withContext(Dispatchers.IO) {
-            s3Client.getObject(getObjectRequest(bucket, key)).response().metadata()
+            s3Client.getObject(getObjectRequest(bucket, key)).use {
+                it.response().metadata()
+            }
         }
 
     private fun getObjectRequest(bucket: String, key: String): GetObjectRequest =
