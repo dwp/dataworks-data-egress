@@ -107,7 +107,7 @@ class DbServiceImplTest : WordSpec() {
                 val matchingSourcePrefix = "source/prefix/$TODAYS_DATE_PLACEHOLDER/collection/"
                 val matchingDestinationPrefix = "destination/prefix/${todaysDate("yyyyMMdd")}"
 
-                val matchingItem = egressTableItem(matchingSourcePrefix,DESTINATION_PREFIX+"/"+TODAYS_YYYYMMDD_FORMATED_DATE_PLACEHOLDER)
+                val matchingItem = egressTableItem(matchingSourcePrefix,DESTINATION_PREFIX+"/"+TODAYS_YYYYMMDD_FORMATTED_DATE_PLACEHOLDER)
                 val scanResponse = with(ScanResponse.builder()) {
                     items(matchingItem)
                     build()
@@ -164,7 +164,7 @@ class DbServiceImplTest : WordSpec() {
         private const val DESTINATION_BUCKET_KEY: String = "destination_bucket"
         private const val DESTINATION_PREFIX_KEY: String = "destination_prefix"
         private const val TRANSFER_TYPE_KEY: String = "transfer_type"
-        private const val TODAYS_YYYYMMDD_FORMATED_DATE_PLACEHOLDER = "\$TODAYS_YYYYMMDD_FORMATED_DATE"
+        private const val TODAYS_YYYYMMDD_FORMATTED_DATE_PLACEHOLDER = "\$TODAYS_YYYYMMDD_FORMATTED_DATE"
         private const val TODAYS_DATE_PLACEHOLDER = "\$TODAYS_DATE"
         private const val PIPELINE_NAME_KEY = "pipeline_name"
         private const val RECIPIENT_KEY = "recipient_name"
