@@ -1,4 +1,4 @@
-FROM gradle:jdk14 as build
+FROM gradle:jdk16 as build
 
 RUN mkdir -p /build
 COPY build.gradle.kts .
@@ -7,7 +7,7 @@ COPY src/ ./src
 RUN gradle build
 RUN cp $(ls build/libs/*.jar | grep -v plain) /build/dataworks-data-egress.jar
 
-FROM openjdk:14-alpine
+FROM openjdk:16-alpine
 
 ARG http_proxy_full=""
 

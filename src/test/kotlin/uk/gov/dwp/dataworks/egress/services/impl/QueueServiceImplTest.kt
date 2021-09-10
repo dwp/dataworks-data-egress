@@ -1,7 +1,6 @@
 package uk.gov.dwp.dataworks.egress.services.impl
 
 import com.nhaarman.mockitokotlin2.*
-import io.kotest.core.spec.style.StringSpec
 import io.kotest.core.spec.style.WordSpec
 import io.kotest.matchers.collections.shouldContainInOrder
 import io.kotest.matchers.shouldBe
