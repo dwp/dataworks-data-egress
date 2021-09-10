@@ -107,7 +107,7 @@ class DbServiceImplTest : WordSpec() {
                 val matchingSourcePrefix = "source/prefix/$TODAYS_DATE_PLACEHOLDER/collection/"
                 val matchingDestinationPrefix = "destination/prefix/${todaysDate("yyyyMMdd")}"
 
-                val matchingItem = egressTableItem(matchingSourcePrefix,DESTINATION_PREFIX+"/"+TODAYS_YYYYMMDD_FORMATTED_DATE_PLACEHOLDER)
+                val matchingItem = egressTableItem(matchingSourcePrefix,"$DESTINATION_PREFIX/$TODAYS_YYYYMMDD_FORMATTED_DATE_PLACEHOLDER")
                 val scanResponse = with(ScanResponse.builder()) {
                     items(matchingItem)
                     build()
@@ -118,7 +118,7 @@ class DbServiceImplTest : WordSpec() {
                 }
                 val dbService = DbServiceImpl(dynamoDb, DATA_EGRESS_TABLE)
                 val entries = dbService.tableEntryMatches(receivedPrefix)
-                entries shouldContainExactly listOf(egressSpecification("$interpolatedPrefix/","$matchingDestinationPrefix"))
+                entries shouldContainExactly listOf(egressSpecification("$interpolatedPrefix/", matchingDestinationPrefix))
             }
         }
     }

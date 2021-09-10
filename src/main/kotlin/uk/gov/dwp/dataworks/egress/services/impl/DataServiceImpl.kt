@@ -93,13 +93,13 @@ class DataServiceImpl(
                     val request = if (wasEncryptedByHtme(metadata) && specification.rewrapDataKey)
                     {
                         val(encryptingKeyID, reWrappingKey) = fetchReWrappingKeyParameter(specification)
-                        logger.info("ReWrapping .....", "public key" to "$reWrappingKey")
+                        logger.info("ReWrapping .....", "public key" to reWrappingKey)
                         val reWrappedDataKey = reWrapDataKey(
                             metadata[ENCRYPTING_KEY_ID_METADATA_KEY],
                             metadata[CIPHERTEXT_METADATA_KEY],
                             reWrappingKey
                         )
-                        logger.info("ReWrapped .....", "datakey" to "$reWrappedDataKey")
+                        logger.info("ReWrapped .....", "datakey" to reWrappedDataKey)
                         putObjectRequestWithReWrappedKeyAsEncryptionMetadata(specification, key, encryptingKeyID,
                             reWrappedDataKey, metadata)
                     }
@@ -181,8 +181,8 @@ class DataServiceImpl(
                     INITIALISATION_VECTOR_METADATA_KEY to metadata[INITIALISATION_VECTOR_METADATA_KEY],
                     ENCRYPTING_KEY_ID_METADATA_KEY to metadata[ENCRYPTING_KEY_ID_METADATA_KEY],
                     CIPHERTEXT_METADATA_KEY to metadata[CIPHERTEXT_METADATA_KEY],
-                    DATA_PRODUCT to sendMetadata(metadata[DATA_PRODUCT]),
-                    DATA_PRODUCT_TYPE to sendMetadata(metadata[DATA_PRODUCT_TYPE])
+                    DATA_PRODUCT to (metadata[DATA_PRODUCT] ?: ""),
+                    DATA_PRODUCT_TYPE to (metadata[DATA_PRODUCT_TYPE] ?: "")
                 )
             )
             build()
@@ -204,8 +204,8 @@ class DataServiceImpl(
                     INITIALISATION_VECTOR_METADATA_KEY to metadata[INITIALISATION_VECTOR_METADATA_KEY],
                     ENCRYPTING_KEY_ID_METADATA_KEY to keyEncryptionKeyId,
                     CIPHERTEXT_METADATA_KEY to reWrappedDataKey,
-                    DATA_PRODUCT to sendMetadata(metadata[DATA_PRODUCT]),
-                    DATA_PRODUCT_TYPE to sendMetadata(metadata[DATA_PRODUCT_TYPE])
+                    DATA_PRODUCT to (metadata[DATA_PRODUCT] ?: ""),
+                    DATA_PRODUCT_TYPE to (metadata[DATA_PRODUCT_TYPE] ?: "")
                  )
             )
             build()
@@ -348,13 +348,6 @@ class DataServiceImpl(
         val file = File(parent, fileName)
         logger.info("Writing file", "file" to "$file", "parent" to "$parent", "filename" to fileName)
         file.writeBytes(targetContents)
-    }
-
-    private fun sendMetadata(metadata: String?):String {
-        if(metadata != null){
-            return metadata;
-        }
-        return "";
     }
 
     companion object {

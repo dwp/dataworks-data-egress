@@ -33,8 +33,8 @@ class DksEncryptionMaterialsProviderTest: StringSpec() {
             }
             val dksEncryptionMaterialsProvider = DksEncryptionMaterialsProvider(keyService)
             val map = mutableMapOf<String, String>()
-            map.put("keyid", keyId)
-            map.put("encryptedkey", encryptedKey)
+            map["keyid"] = keyId
+            map["encryptedkey"] = encryptedKey
             dksEncryptionMaterialsProvider.getEncryptionMaterials(map)
             verify(keyService, times(1)).decryptKey(keyId, encryptedKey)
         }

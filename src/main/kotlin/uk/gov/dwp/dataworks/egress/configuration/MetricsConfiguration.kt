@@ -6,7 +6,6 @@ import io.micrometer.prometheus.PrometheusConfig
 import io.micrometer.prometheus.PrometheusMeterRegistry
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.client.Counter
-import io.prometheus.client.Gauge
 import io.prometheus.client.exporter.PushGateway
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -25,14 +24,6 @@ class MetricsConfiguration(private val pushgatewayHost: String, private val push
     @Bean
     fun sentFilesFailure() =
         counter("data_egress_files_sent_failure", "Count of files which failed to send", "source_prefix", "pipeline_name", "destination_prefix", "recipient",  "transfer_type")
-
-    private fun gauge(name: String, help: String, vararg labels: String): Gauge =
-        with(Gauge.build()) {
-            name(name)
-            labelNames(*labels)
-            help(help)
-            register()
-        }
 
     private fun counter(name: String, help: String, vararg labels: String): Counter =
         with(Counter.build()) {

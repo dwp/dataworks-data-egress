@@ -5,7 +5,7 @@ services:
   localstack:
     image: localstack/localstack:latest
     ports:
-      - 4566:4566
+      - "4566:4566"
     container_name: localstack
     environment:
       - SERVICES=dynamodb,s3,sqs,ssm
@@ -21,7 +21,7 @@ services:
   dks:
     image: dks
     ports:
-      - 8443:8443
+      - "8443:8443"
     build:
       context: images/dks
     container_name: dks

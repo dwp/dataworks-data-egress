@@ -6,14 +6,16 @@ import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldContainAll
+import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.ktor.client.*
-import io.ktor.client.features.*
 import io.ktor.client.features.json.*
 import io.ktor.client.request.*
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.future.await
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.time.withTimeout
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.AnnotationConfigApplicationContext
@@ -25,10 +27,7 @@ import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest
 import software.amazon.awssdk.services.dynamodb.model.PutItemResponse
 import software.amazon.awssdk.services.s3.S3AsyncClient
-import software.amazon.awssdk.services.s3.model.GetObjectRequest
-import software.amazon.awssdk.services.s3.model.GetObjectResponse
-import software.amazon.awssdk.services.s3.model.NoSuchKeyException
-import software.amazon.awssdk.services.s3.model.PutObjectRequest
+import software.amazon.awssdk.services.s3.model.*
 import software.amazon.awssdk.services.sqs.SqsAsyncClient
 import software.amazon.awssdk.services.sqs.model.SendMessageRequest
 import uk.gov.dwp.dataworks.egress.services.CipherService
@@ -41,7 +40,6 @@ import java.time.Duration
 import java.util.*
 import java.util.zip.GZIPInputStream
 import java.util.zip.Inflater
-import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
 import com.amazonaws.services.s3.model.PutObjectRequest as PutObjectRequestVersion1
 
@@ -51,6 +49,52 @@ class IntegrationTests: StringSpec() {
 
 
     init {
+
+        "Should process collection specific files" {
+            coroutineScope {
+                List(10) { collectionNumber ->
+                    List(10) { fileNumber -> sourceContents("collection_${collectionNumber}_file_${fileNumber}") }
+                }.forEachIndexed { collectionNumber, list ->
+                    val (encryptingKeyId, plaintextDataKey, ciphertextDataKey) = dataKeyService.batchDataKey()
+                    list.forEachIndexed { fileNumber, fileContents ->
+                        launch {
+                            val (iv, encrypted) = cipherService.encrypt(plaintextDataKey, fileContents.toByteArray())
+
+                            val key =
+                                "collections/${todaysDate()}/incremental/database.collection$collectionNumber-$fileNumber.csv.enc"
+                            val putRequest = with(PutObjectRequest.builder()) {
+                                bucket(SOURCE_BUCKET)
+                                key(key)
+                                metadata(mapOf(ENCRYPTING_KEY_ID_METADATA_KEY to encryptingKeyId,
+                                    INITIALISATION_VECTOR_METADATA_KEY to iv,
+                                    CIPHERTEXT_METADATA_KEY to ciphertextDataKey))
+                                build()
+                            }
+                            logger.info("Putting object at $key")
+                            s3.putObject(putRequest, AsyncRequestBody.fromBytes(encrypted)).await()
+                            logger.info("Put object at $key")
+                        }
+                    }
+                }
+                launch {
+                    logger.info("Inserting egress item")
+                    val wtf = insertEgressItem("collections/\$TODAYS_DATE/incremental/database.collection5-",
+                        "collections/\$TODAYS_DATE/incremental/", S3_TRANSFER_TYPE, decrypt = true)
+                    logger.info("Inserted egress item: $wtf")
+                }
+            }
+            val message =
+                messageBody("collections/${todaysDate()}/incremental/database.collection5-$PIPELINE_SUCCESS_FLAG")
+            val request = sendMessageRequest(message)
+            logger.info("Sending SQS message: '$request'.")
+            val response = sqs.sendMessage(request).await()
+            logger.info("Sent SQS message: '$response'.")
+            withTimeout(Duration.ofSeconds(TEST_TIMEOUT)) {
+                egressedHtmeSubset() shouldContainExactlyInAnyOrder List(10) {
+                    "collections/${todaysDate()}/incremental/database.collection5-$it.csv"
+                }
+            }
+        }
 
         "Should process client-side-encrypted encrypted files" {
             val identifier = "cse"
@@ -93,7 +137,7 @@ class IntegrationTests: StringSpec() {
                 build()
             }
             s3.putObject(putRequest, AsyncRequestBody.fromBytes(encrypted)).await()
-            insertEgressItem("$identifier/", "$identifier/", TRANSFER_TYPE, false)
+            insertEgressItem("$identifier/", "$identifier/", S3_TRANSFER_TYPE, false)
             val message = messageBody("$identifier/$PIPELINE_SUCCESS_FLAG")
             val request = sendMessageRequest(message)
             sqs.sendMessage(request).await()
@@ -126,7 +170,7 @@ class IntegrationTests: StringSpec() {
                 build()
             }
             s3.putObject(putRequest, AsyncRequestBody.fromString(sourceContents)).await()
-            insertEgressItem("$identifier/\$TODAYS_DATE", "$identifier/\$TODAYS_DATE", TRANSFER_TYPE)
+            insertEgressItem("$identifier/\$TODAYS_DATE", "$identifier/\$TODAYS_DATE", S3_TRANSFER_TYPE)
             val message = messageBody("$identifier/${todaysDate()}/$PIPELINE_SUCCESS_FLAG")
             val request = sendMessageRequest(message)
             sqs.sendMessage(request).await()
@@ -180,7 +224,7 @@ class IntegrationTests: StringSpec() {
                 logger.info("Directory exists: '$testFile'")
                 val file = File("/testData/sft/$identifier.csv")
                 while (!file.exists()) {
-                    logger.info("$file doesn't exist")
+                    logger.info("Awaiting presence of '$file'.")
                     delay(2000)
                 }
 
@@ -192,6 +236,22 @@ class IntegrationTests: StringSpec() {
             val metricNames = withTimeout(Duration.ofSeconds(TEST_TIMEOUT)) { egressMetrics() }
             metricNames shouldContainAll listOf("data_egress_files_sent_success_total")
         }
+    }
+
+    private tailrec suspend fun egressedHtmeSubset(): List<String> {
+        val request = with(ListObjectsV2Request.builder()) {
+            bucket(DESTINATION_BUCKET)
+            prefix("collections/${todaysDate()}/incremental/")
+            build()
+        }
+
+        val keys = s3.listObjectsV2(request).await().contents().map(S3Object::key)
+        logger.info("Got ${keys.size} keys: '$keys'.")
+        if (keys.size >= 10) {
+            return keys
+        }
+        delay(3_000)
+        return egressedHtmeSubset()
     }
 
     private tailrec suspend fun egressMetrics(): List<String> {
@@ -218,7 +278,13 @@ class IntegrationTests: StringSpec() {
                                      decrypt: Boolean = true,
                                      compressionFormat: String = "", rewrapDatakey: Boolean = false,
                                      ssmParamName: String = "") {
-        insertEgressItem("$identifier/", "$identifier/", TRANSFER_TYPE, decrypt, compressionFormat,rewrapDatakey, ssmParamName)
+        insertEgressItem("$identifier/",
+            "$identifier/",
+            S3_TRANSFER_TYPE,
+            decrypt,
+            compressionFormat,
+            rewrapDatakey,
+            ssmParamName)
         val message = messageBody("$identifier/$PIPELINE_SUCCESS_FLAG")
         val request = sendMessageRequest(message)
         sqs.sendMessage(request).await()
@@ -270,9 +336,9 @@ class IntegrationTests: StringSpec() {
 
     private tailrec suspend fun egressedResponse(bucket: String, key: String): ResponseBytes<GetObjectResponse> {
         try {
+            logger.info("Awaiting presence of '$bucket/$key'.")
             return s3.getObject(egressedObjectRequest(bucket, key), AsyncResponseTransformer.toBytes()).await()
         } catch (e: NoSuchKeyException) {
-            logger.info("'$bucket/$key' not present")
             delay(2000)
         }
         return egressedResponse(bucket, key)
@@ -293,9 +359,12 @@ class IntegrationTests: StringSpec() {
         }
 
 
-    private suspend fun insertEgressItem(sourcePrefix: String, destinationPrefix: String,
-                                         transferType: String, decrypt: Boolean = false,
-                                         compressionFormat: String = "", rewrapDatakey: Boolean = false,
+    private suspend fun insertEgressItem(sourcePrefix: String,
+                                         destinationPrefix: String,
+                                         transferType: String,
+                                         decrypt: Boolean = false,
+                                         compressionFormat: String = "",
+                                         rewrapDatakey: Boolean = false,
                                          ssmParamName: String = ""): PutItemResponse {
         val baseRecord = mapOf<String, AttributeValue>(
             egressColumn(SOURCE_BUCKET_FIELD_NAME, SOURCE_BUCKET),
@@ -323,7 +392,7 @@ class IntegrationTests: StringSpec() {
 
         val withOptionalSsmParamField = withOptionalDataKeyReWrapField.takeIf { decrypt }?.let { r ->
             ssmParamName.takeIf(String::isNotBlank)?.let { paramName ->
-                r + egressColumn(ENCRYPTIING_KEY_SSM_PARAM_NAME_FIELD_NAME, paramName)
+                r + egressColumn(ENCRYPTING_KEY_SSM_PARAM_NAME_FIELD_NAME, paramName)
             }
         } ?: withOptionalDataKeyReWrapField
 
@@ -347,7 +416,7 @@ class IntegrationTests: StringSpec() {
         private const val PIPELINE_SUCCESS_FLAG = "pipeline_success.flag"
         private const val SOURCE_BUCKET = "source"
         private const val DESTINATION_BUCKET = "destination"
-        private const val TRANSFER_TYPE = "S3"
+        private const val S3_TRANSFER_TYPE = "S3"
         private const val SFT_TRANSFER_TYPE = "SFT"
         private const val RECIPIENT = "recipient"
 
@@ -366,7 +435,7 @@ class IntegrationTests: StringSpec() {
         private const val COMPRESS_FIELD_NAME = "compress"
         private const val DECRYPT_FIELD_NAME = "decrypt"
         private const val REWRAP_DATAKEY_FIELD_NAME: String = "rewrap_datakey"
-        private const val ENCRYPTIING_KEY_SSM_PARAM_NAME_FIELD_NAME: String = "encrypting_key_ssm_parm_name"
+        private const val ENCRYPTING_KEY_SSM_PARAM_NAME_FIELD_NAME: String = "encrypting_key_ssm_parm_name"
 
 
         private val applicationContext by lazy {
