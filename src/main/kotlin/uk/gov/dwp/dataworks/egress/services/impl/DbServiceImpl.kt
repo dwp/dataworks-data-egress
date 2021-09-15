@@ -1,6 +1,9 @@
 package uk.gov.dwp.dataworks.egress.services.impl
 
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.FlowCollector
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.future.await
 import org.springframework.stereotype.Service
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient
@@ -35,12 +38,14 @@ class DbServiceImpl(private val dynamoDb: DynamoDbAsyncClient,
             transferType = attributeStringValue(dynamoDbRecord, TRANSFER_TYPE_COLUMN),
             decrypt = dynamoDbRecord[DECRYPT_COLUMN]?.bool() ?: false,
             rewrapDataKey = dynamoDbRecord[REWRAP_DATAKEY_COLUMN]?.bool() ?: false,
-            encryptingKeySsmParmName = dynamoDbRecord[ENCRYPTIING_KEY_SSM_PARAM_NAME_COLUMN]?.s(),
+            encryptingKeySsmParmName = dynamoDbRecord[ENCRYPTING_KEY_SSM_PARAM_NAME_COLUMN]?.s(),
             compress = dynamoDbRecord[COMPRESS_COLUMN]?.bool() ?: false,
             compressionFormat = dynamoDbRecord[COMPRESSION_FORMAT_COLUMN]?.s(),
             roleArn = dynamoDbRecord[ROLE_ARN_COLUMN]?.s(),
             pipelineName = attributeStringValue(dynamoDbRecord, PIPELINE_COLUMN),
-            recipient = attributeStringValue(dynamoDbRecord, RECIPIENT_COLUMN)
+            recipient = attributeStringValue(dynamoDbRecord, RECIPIENT_COLUMN),
+            controlFilePrefix = dynamoDbRecord[CONTROL_FILE_PREFIX_COLUMN]?.s(),
+            timestampOutput = dynamoDbRecord[TIMESTAMP_OUTPUT_COLUMN]?.bool() ?: false
         )
 
     private suspend fun entries(): Flow<List<Map<String, AttributeValue>>> =
@@ -79,9 +84,11 @@ class DbServiceImpl(private val dynamoDb: DynamoDbAsyncClient,
         private const val COMPRESS_COLUMN: String = "compress"
         private const val DECRYPT_COLUMN: String = "decrypt"
         private const val REWRAP_DATAKEY_COLUMN: String = "rewrap_datakey"
-        private const val ENCRYPTIING_KEY_SSM_PARAM_NAME_COLUMN: String = "encrypting_key_ssm_parm_name"
+        private const val ENCRYPTING_KEY_SSM_PARAM_NAME_COLUMN: String = "encrypting_key_ssm_parm_name"
         private const val COMPRESSION_FORMAT_COLUMN: String = "compress_fmt"
         private const val ROLE_ARN_COLUMN: String = "role_arn"
+        private const val CONTROL_FILE_PREFIX_COLUMN: String = "control_file_prefix"
+        private const val TIMESTAMP_OUTPUT_COLUMN: String = "timestamp_files"
         private const val TODAYS_DATE_PLACEHOLDER = "\$TODAYS_DATE"
         private const val TODAYS_YYYYMMDD_FORMATTED_DATE_PLACEHOLDER = "\$TODAYS_YYYYMMDD_FORMATTED_DATE"
         private const val PIPELINE_COLUMN = "pipeline_name"

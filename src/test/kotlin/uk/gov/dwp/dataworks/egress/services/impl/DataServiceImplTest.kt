@@ -15,10 +15,14 @@ import software.amazon.awssdk.services.s3.S3AsyncClient
 import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.s3.model.*
 import software.amazon.awssdk.services.ssm.SsmClient
-import software.amazon.awssdk.services.ssm.model.*
+import software.amazon.awssdk.services.ssm.model.GetParameterRequest
+import software.amazon.awssdk.services.ssm.model.GetParameterResponse
+import software.amazon.awssdk.services.ssm.model.Parameter
+import software.amazon.awssdk.services.ssm.model.ParameterType
 import uk.gov.dwp.dataworks.egress.domain.EgressSpecification
 import uk.gov.dwp.dataworks.egress.services.CipherService
 import uk.gov.dwp.dataworks.egress.services.CompressionService
+import uk.gov.dwp.dataworks.egress.services.ControlFileService
 import uk.gov.dwp.dataworks.egress.services.DataKeyService
 import java.io.ByteArrayInputStream
 import java.io.File
@@ -59,6 +63,7 @@ class DataServiceImplTest : WordSpec() {
 
                 val assumedRoleS3Client = mock<S3AsyncClient>()
                 val assumedRoleSsmClient = mock<SsmClient>()
+                val controlFileService = mock<ControlFileService>()
                 val assumedRoleS3ClientProvider: suspend (String) -> S3AsyncClient = { assumedRoleS3Client }
                 val assumedRoleSsmClientProvider: suspend (String) -> SsmClient = { assumedRoleSsmClient }
                 val dataKeyService = mock<DataKeyService> {
@@ -83,12 +88,12 @@ class DataServiceImplTest : WordSpec() {
                     decryptingS3Client,
                     assumedRoleS3ClientProvider,
                     assumedRoleSsmClientProvider,
+                    controlFileService,
                     dataKeyService,
                     cipherService,
                     compressionService,
                     sentFilesSuccess,
-                    sentFilesFailure
-                )
+                    sentFilesFailure)
 
                 val specification = EgressSpecification(
                     SOURCE_BUCKET, SOURCE_PREFIX,
@@ -177,6 +182,8 @@ class DataServiceImplTest : WordSpec() {
                 }
 
                 val ssmClient = mock<SsmClient> ()
+                val controlFileService = mock<ControlFileService>()
+
                 val decryptingS3Client = mock<AmazonS3EncryptionV2>()
                 val assumedRoleS3Client = mock<S3AsyncClient> {
                     on {
@@ -212,12 +219,12 @@ class DataServiceImplTest : WordSpec() {
                     decryptingS3Client,
                     assumedRoleS3ClientProvider,
                     assumedRoleSsmClientProvider,
+                    controlFileService,
                     dataKeyService,
                     cipherService,
                     compressionService,
                     sentFilesSuccess,
-                    sentFilesFailure
-                )
+                    sentFilesFailure)
 
                 val specification = EgressSpecification(
                     SOURCE_BUCKET, SOURCE_PREFIX,
@@ -315,6 +322,7 @@ class DataServiceImplTest : WordSpec() {
                 val assumedRoleSsmClientProvider: suspend (String) -> SsmClient = { assumedRoleSsmClient }
                 val dataKeyService = mock<DataKeyService>()
                 val cipherService = mock<CipherService>()
+                val controlFileService = mock<ControlFileService>()
 
                 val compressionService = mock<CompressionService> {
                     on { compress(any(), any()) } doReturn "COMPRESSED_CONTENTS".toByteArray()
@@ -330,6 +338,7 @@ class DataServiceImplTest : WordSpec() {
                     decryptingS3Client,
                     assumedRoleS3ClientProvider,
                     assumedRoleSsmClientProvider,
+                    controlFileService,
                     dataKeyService,
                     cipherService,
                     compressionService,
@@ -408,6 +417,7 @@ class DataServiceImplTest : WordSpec() {
                 reset(sentFilesFailure)
                 val sentFilesSuccessChild = mock<Counter.Child>()
                 given(sentFilesSuccess.labels(any(), any(), any(), any(), any())).willReturn(sentFilesSuccessChild)
+                val controlFileService = mock<ControlFileService>()
 
                 val dataService = DataServiceImpl(
                     s3AsyncClient,
@@ -416,6 +426,7 @@ class DataServiceImplTest : WordSpec() {
                     decryptingS3Client,
                     assumedRoleS3ClientProvider,
                     assumedRoleSsmClientProvider,
+                    controlFileService,
                     dataKeyService,
                     cipherService,
                     compressionService,
@@ -499,6 +510,7 @@ class DataServiceImplTest : WordSpec() {
                     on { decrypt(any(), any(), any()) } doReturn "DECRYPTED_CONTENTS".toByteArray()
                 }
                 val compressionService = mock<CompressionService>()
+                val controlFileService = mock<ControlFileService>()
 
                 val dataService = DataServiceImpl(
                     s3AsyncClient,
@@ -507,12 +519,13 @@ class DataServiceImplTest : WordSpec() {
                     decryptingS3Client,
                     assumedRoleS3ClientProvider,
                     assumedRoleSsmClientProvider,
+                    controlFileService,
                     dataKeyService,
                     cipherService,
                     compressionService,
                     sentFilesSuccess,
-                    sentFilesFailure
-                )
+                    sentFilesFailure)
+
                 val currentDirectory = System.getProperty("user.dir")
                 val testFolderLocation = "/$currentDirectory/sftTest"
                 val specification = EgressSpecification(
