@@ -29,18 +29,19 @@ class ControlFileServiceImplTest: StringSpec() {
             verifyInteractions(assumedRoleS3Client, asyncS3Client, "$DESTINATION_PREFIX/$CONTROL_FILE_PREFIX-${SimpleDateFormat("yyyyMMdd").format(Date())}")
         }
 
-        "Use assumed role if asked" {
-            val (asyncS3Client, assumedRoleS3Client, controlFileService) = serviceAndItsClients()
-            controlFileService.egressControlFile(egressed(), egressSpecification(CONTROL_FILE_PREFIX, ROLE_ARN))
-            verifyInteractions(asyncS3Client, assumedRoleS3Client, "$DESTINATION_PREFIX/$CONTROL_FILE_PREFIX")
-        }
-
         "Do not put control file if not asked" {
             val (asyncS3Client, assumedRoleS3Client, controlFileService) = serviceAndItsClients()
             controlFileService.egressControlFile(egressed(), egressSpecification())
             verifyZeroInteractions(asyncS3Client)
             verifyZeroInteractions(assumedRoleS3Client)
         }
+
+        "Use assumed role if asked" {
+            val (asyncS3Client, assumedRoleS3Client, controlFileService) = serviceAndItsClients()
+            controlFileService.egressControlFile(egressed(), egressSpecification(CONTROL_FILE_PREFIX, ROLE_ARN))
+            verifyInteractions(asyncS3Client, assumedRoleS3Client, "$DESTINATION_PREFIX/$CONTROL_FILE_PREFIX")
+        }
+
     }
 
     private fun serviceAndItsClients(): Triple<S3AsyncClient, S3AsyncClient, ControlFileServiceImpl> {

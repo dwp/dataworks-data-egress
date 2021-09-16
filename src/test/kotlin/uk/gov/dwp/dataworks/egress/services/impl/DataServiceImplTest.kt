@@ -4,6 +4,8 @@ import com.amazonaws.services.s3.AmazonS3EncryptionV2
 import com.amazonaws.services.s3.model.S3ObjectInputStream
 import com.nhaarman.mockitokotlin2.*
 import io.kotest.core.spec.style.WordSpec
+import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
+import io.kotest.matchers.types.shouldBeSameInstanceAs
 import io.prometheus.client.Counter
 import org.springframework.boot.test.mock.mockito.MockBean
 import software.amazon.awssdk.core.ResponseBytes
@@ -40,7 +42,7 @@ class DataServiceImplTest : WordSpec() {
 
     init {
         "dataService" should {
-            "decrypt" {
+            "decrypt, send control file" {
                 val objects = objectsSummaries()
                 val objectsWithContents = objectsWithContents()
                 val s3AsyncClient = s3AsyncClient(objects, objectsWithContents)
@@ -100,8 +102,7 @@ class DataServiceImplTest : WordSpec() {
                     DESTINATION_BUCKET, DESTINATION_PREFIX, S3_TRANSFER_TYPE,
                     decrypt = true, rewrapDataKey=false, encryptingKeySsmParmName="",
                     compress = false, compressionFormat = null, roleArn = null,
-                    pipelineName = PIPELINE_NAME, recipient = RECIPIENT
-                )
+                    pipelineName = PIPELINE_NAME, recipient = RECIPIENT, controlFilePrefix = CONTROL_FILE_PREFIX)
 
                 dataService.egressObjects(specification)
                 verify(s3Client, times(100)).getObject(any<GetObjectRequest>())
@@ -128,7 +129,18 @@ class DataServiceImplTest : WordSpec() {
 
                 verify(sentFilesSuccessChild, times(100)).inc()
                 verifyZeroInteractions(sentFilesFailure)
-            }
+
+                val specificationCaptor = argumentCaptor<EgressSpecification>()
+                argumentCaptor<List<String>> {
+                    verify(controlFileService, times(1)).egressControlFile(capture(), specificationCaptor.capture())
+                    firstValue shouldContainExactlyInAnyOrder objectsSummaries().map(S3Object::key)
+                        .map { "$DESTINATION_PREFIX/$it" }
+                    specificationCaptor.firstValue shouldBeSameInstanceAs specification
+                }
+
+                verifyNoMoreInteractions(controlFileService)
+           }
+
 
             "assume role and re-wrap data keys" {
                 val objects = objectsSummaries()
@@ -257,6 +269,7 @@ class DataServiceImplTest : WordSpec() {
 
                 verify(sentFilesSuccessChild, times(100)).inc()
                 verifyZeroInteractions(sentFilesFailure)
+                verifyZeroInteractions(controlFileService)
 
                 reset(sentFilesSuccess)
                 reset(sentFilesFailure)
@@ -375,6 +388,7 @@ class DataServiceImplTest : WordSpec() {
 
                 verify(sentFilesSuccessChild, times(100)).inc()
                 verifyZeroInteractions(sentFilesFailure)
+                verifyZeroInteractions(controlFileService)
 
                 reset(sentFilesSuccess)
                 reset(sentFilesFailure)
@@ -473,6 +487,7 @@ class DataServiceImplTest : WordSpec() {
 
                 verify(sentFilesSuccessChild, times(100)).inc()
                 verifyZeroInteractions(sentFilesFailure)
+                verifyZeroInteractions(controlFileService)
 
                 reset(sentFilesSuccess)
                 reset(sentFilesFailure)
@@ -553,6 +568,7 @@ class DataServiceImplTest : WordSpec() {
                 verifyNoMoreInteractions(decryptingS3Client)
                 verifyZeroInteractions(assumedRoleS3Client)
                 verifyZeroInteractions(compressionService)
+                verifyZeroInteractions(controlFileService)
             }
 
         }
@@ -657,6 +673,7 @@ class DataServiceImplTest : WordSpec() {
         private const val SFT_TRANSFER_TYPE = "SFT"
         private const val PIPELINE_NAME = "PIPELINE_NAME"
         private const val RECIPIENT = "RECIPIENT"
+        private const val CONTROL_FILE_PREFIX = "CONTROL_FILE_PREFIX"
 
 
         private const val ENCRYPTING_KEY_ID_METADATA_KEY = "datakeyencryptionkeyid"
