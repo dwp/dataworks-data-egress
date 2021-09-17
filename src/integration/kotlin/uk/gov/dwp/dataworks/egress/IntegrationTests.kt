@@ -78,11 +78,11 @@ class IntegrationTests: StringSpec() {
                 }
                 launch {
                     logger.info("Inserting egress item")
-                    val wtf = insertEgressItem("collections/\$TODAYS_DATE/incremental/database.collection5-",
+                    val response = insertEgressItem("collections/\$TODAYS_DATE/incremental/database.collection5-",
                         "collections/\$TODAYS_DATE/incremental/", S3_TRANSFER_TYPE, decrypt = true,
                         controlFilePrefix = "database.collection5-\$TODAYS_DATE.control",
                         timestampFiles = true)
-                    logger.info("Inserted egress item: $wtf")
+                    logger.info("Inserted egress item: $response")
                 }
             }
             val message =
