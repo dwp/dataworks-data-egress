@@ -43,7 +43,7 @@ class ControlFileServiceImpl(s3AsyncClient: S3AsyncClient,
                             key(targetKey)
                             build()
                         }
-                        println(String(targetContents))
+
                         egressClient(specification).putObject(request, AsyncRequestBody.fromBytes(targetContents))
                             .await()
                         logger.info("Transferred control contents to s3",
@@ -75,13 +75,13 @@ class ControlFileServiceImpl(s3AsyncClient: S3AsyncClient,
         }
     }
 
-    private fun targetContents(egressed: List<String>): ByteArray {
-        val outputStream = ByteArrayOutputStream()
-        BufferedOutputStream(outputStream).use { buffered ->
-            egressed.map(::File).map(File::getName).map { "$it\n" }.map(String::toByteArray).forEach(buffered::write)
+    private fun targetContents(egressed: List<String>): ByteArray =
+        with (ByteArrayOutputStream()) {
+            BufferedOutputStream(this).use { buffered ->
+                egressed.map(::File).map(File::getName).map { "$it\n" }.map(String::toByteArray).forEach(buffered::write)
+            }
+            toByteArray()
         }
-        return outputStream.toByteArray()
-    }
 
     companion object {
         private val logger = DataworksLogger.getLogger(ControlFileServiceImpl::class)
