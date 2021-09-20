@@ -78,9 +78,11 @@ class IntegrationTests: StringSpec() {
                 }
                 launch {
                     logger.info("Inserting egress item")
-                    val wtf = insertEgressItem("collections/\$TODAYS_DATE/incremental/database.collection5-",
-                        "collections/\$TODAYS_DATE/incremental/", S3_TRANSFER_TYPE, decrypt = true)
-                    logger.info("Inserted egress item: $wtf")
+                    val response = insertEgressItem("collections/\$TODAYS_DATE/incremental/database.collection5-",
+                        "collections/\$TODAYS_DATE/incremental/", S3_TRANSFER_TYPE, decrypt = true,
+                        controlFilePrefix = "database.collection5-\$TODAYS_DATE.control",
+                        timestampFiles = true)
+                    logger.info("Inserted egress item: $response")
                 }
             }
             val message =
@@ -91,8 +93,8 @@ class IntegrationTests: StringSpec() {
             logger.info("Sent SQS message: '$response'.")
             withTimeout(Duration.ofSeconds(TEST_TIMEOUT)) {
                 egressedHtmeSubset() shouldContainExactlyInAnyOrder List(10) {
-                    "collections/${todaysDate()}/incremental/database.collection5-$it.csv"
-                }
+                    "collections/${todaysDate()}/incremental/database.collection5-$it.${todaysDate("yyyyMMdd")}.csv"
+                } + "collections/${todaysDate()}/incremental/database.collection5-${todaysDate("yyyyMMdd")}.control"
             }
         }
 
@@ -247,7 +249,7 @@ class IntegrationTests: StringSpec() {
 
         val keys = s3.listObjectsV2(request).await().contents().map(S3Object::key)
         logger.info("Got ${keys.size} keys: '$keys'.")
-        if (keys.size >= 10) {
+        if (keys.size > 10) {
             return keys
         }
         delay(3_000)
@@ -358,6 +360,12 @@ class IntegrationTests: StringSpec() {
             build()
         }
 
+    private fun egressBooleanColumn(column: String, value: Boolean) =
+        column to with(AttributeValue.builder()) {
+            bool(value)
+            build()
+        }
+
 
     private suspend fun insertEgressItem(sourcePrefix: String,
                                          destinationPrefix: String,
@@ -365,7 +373,9 @@ class IntegrationTests: StringSpec() {
                                          decrypt: Boolean = false,
                                          compressionFormat: String = "",
                                          rewrapDatakey: Boolean = false,
-                                         ssmParamName: String = ""): PutItemResponse {
+                                         ssmParamName: String = "",
+                                         controlFilePrefix: String = "",
+                                         timestampFiles: Boolean = false): PutItemResponse {
         val baseRecord = mapOf<String, AttributeValue>(
             egressColumn(SOURCE_BUCKET_FIELD_NAME, SOURCE_BUCKET),
             egressColumn(DESTINATION_BUCKET_FIELD_NAME, DESTINATION_BUCKET),
@@ -373,6 +383,7 @@ class IntegrationTests: StringSpec() {
             egressColumn(RECIPIENT_FIELD_NAME, RECIPIENT),
             egressColumn(SOURCE_PREFIX_FIELD_NAME, sourcePrefix),
             egressColumn(DESTINATION_PREFIX_FIELD_NAME, destinationPrefix),
+            egressBooleanColumn(TIMESTAMP_OUTPUT_FIELD_NAME, timestampFiles),
             egressColumn(TRANSFER_TYPE_FIELD_NAME, transferType))
 
         val withOptionalCompressionFields = baseRecord.let { r ->
@@ -396,9 +407,16 @@ class IntegrationTests: StringSpec() {
             }
         } ?: withOptionalDataKeyReWrapField
 
+        val withOptionalMetadataPrefix = withOptionalSsmParamField.let { r ->
+            controlFilePrefix.takeIf(String::isNotBlank)?.let { prefix ->
+                r + egressColumn(CONTROL_FILE_PREFIX_FIELD_NAME, prefix)
+            }
+        } ?: withOptionalSsmParamField
+
+
         val request = with(PutItemRequest.builder()) {
             tableName(EGRESS_TABLE)
-            item(withOptionalSsmParamField)
+            item(withOptionalMetadataPrefix)
             build()
         }
         return dynamoDb.putItem(request).await()
@@ -431,6 +449,8 @@ class IntegrationTests: StringSpec() {
         private const val SOURCE_PREFIX_FIELD_NAME = "source_prefix"
         private const val DESTINATION_PREFIX_FIELD_NAME = "destination_prefix"
         private const val TRANSFER_TYPE_FIELD_NAME = "transfer_type"
+        private const val CONTROL_FILE_PREFIX_FIELD_NAME = "control_file_prefix"
+        private const val TIMESTAMP_OUTPUT_FIELD_NAME = "timestamp_files"
         private const val COMPRESSION_FORMAT_FIELD_NAME = "compress_fmt"
         private const val COMPRESS_FIELD_NAME = "compress"
         private const val DECRYPT_FIELD_NAME = "decrypt"
@@ -449,7 +469,7 @@ class IntegrationTests: StringSpec() {
         private val cipherService = applicationContext.getBean(CipherService::class.java)
         private val dataKeyService = applicationContext.getBean(DataKeyService::class.java)
 
-        private fun todaysDate() = SimpleDateFormat("yyyy-MM-dd").format(Date())
+        private fun todaysDate(format: String = "yyyy-MM-dd") = SimpleDateFormat(format).format(Date())
 
         val client = HttpClient {
             install(JsonFeature) {
