@@ -14,7 +14,9 @@ data class EgressSpecification(val sourceBucket: String,
                                val pipelineName: String,
                                val recipient: String,
                                val timestampOutput: Boolean = false,
-                               val controlFilePrefix: String? = null)
+                               val controlFilePrefix: String? = null,
+                               val manifestFileName: String? = null,
+                               val manifestFileEncryption: String? = null)
 
 data class DataKeyResult(val dataKeyEncryptionKeyId: String, val plaintextDataKey: String, val ciphertextDataKey: String)
 data class ReWrapKeyParameterStoreResult(val KeyId: String, val PublicKey: String)

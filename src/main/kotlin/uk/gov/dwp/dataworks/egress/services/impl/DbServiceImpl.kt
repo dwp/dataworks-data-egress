@@ -45,6 +45,8 @@ class DbServiceImpl(private val dynamoDb: DynamoDbAsyncClient,
             pipelineName = attributeStringValue(dynamoDbRecord, PIPELINE_COLUMN),
             recipient = attributeStringValue(dynamoDbRecord, RECIPIENT_COLUMN),
             controlFilePrefix = dynamoDbRecord[CONTROL_FILE_PREFIX_COLUMN]?.s(),
+            manifestFileName =  dynamoDbRecord[MANIFEST_FILE_NAME_COLUMN]?.s(),
+            manifestFileEncryption = dynamoDbRecord[MANIFEST_FILE_ENCRYPTION_COLUMN]?.s(),
             timestampOutput = dynamoDbRecord[TIMESTAMP_OUTPUT_COLUMN]?.bool() ?: false
         )
 
@@ -88,6 +90,8 @@ class DbServiceImpl(private val dynamoDb: DynamoDbAsyncClient,
         private const val COMPRESSION_FORMAT_COLUMN: String = "compress_fmt"
         private const val ROLE_ARN_COLUMN: String = "role_arn"
         private const val CONTROL_FILE_PREFIX_COLUMN: String = "control_file_prefix"
+        private const val MANIFEST_FILE_NAME_COLUMN: String = "manifest_file_name"
+        private const val MANIFEST_FILE_ENCRYPTION_COLUMN: String = "manifest_file_encryption"
         private const val TIMESTAMP_OUTPUT_COLUMN: String = "timestamp_files"
         private const val TODAYS_DATE_PLACEHOLDER = "\$TODAYS_DATE"
         private const val TODAYS_YYYYMMDD_FORMATTED_DATE_PLACEHOLDER = "\$TODAYS_YYYYMMDD_FORMATTED_DATE"
