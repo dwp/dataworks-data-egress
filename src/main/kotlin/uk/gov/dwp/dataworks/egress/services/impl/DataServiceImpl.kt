@@ -35,6 +35,7 @@ class DataServiceImpl(
     assumedRoleS3ClientProvider: suspend (String) -> S3AsyncClient,
     private val assumedRoleSsmClientProvider: suspend (String) -> SsmClient,
     private val controlFileService: ControlFileService,
+    private val manifestFileService: ManifestFileService,
     private val dataKeyService: DataKeyService,
     private val cipherService: CipherService,
     private val compressionService: CompressionService,
@@ -57,6 +58,10 @@ class DataServiceImpl(
 
         if (specification.controlFilePrefix?.isNotBlank() == true) {
             controlFileService.egressControlFile(egressed, specification)
+        }
+
+        if (specification.manifestFileName?.isNotBlank() == true) {
+            manifestFileService.egressManifestFile(specification)
         }
         return results.all { it }
     }
@@ -103,13 +108,13 @@ class DataServiceImpl(
                     val request = if (wasEncryptedByHtme(metadata) && specification.rewrapDataKey)
                     {
                         val(encryptingKeyID, reWrappingKey) = fetchReWrappingKeyParameter(specification)
-                        logger.info("ReWrapping .....", "public_key" to reWrappingKey)
+                        logger.info("ReWrapping key received, re-wrapping the data key", "re-wrapping key" to reWrappingKey)
                         val reWrappedDataKey = reWrapDataKey(
                             metadata[ENCRYPTING_KEY_ID_METADATA_KEY],
                             metadata[CIPHERTEXT_METADATA_KEY],
                             reWrappingKey)
 
-                        logger.info("ReWrapped .....", "datakey" to reWrappedDataKey)
+                        logger.info("Data key re-wrapped", "re-wrapped data key" to reWrappedDataKey)
                         putObjectRequestWithReWrappedKeyAsEncryptionMetadata(specification, targetKey, encryptingKeyID,
                             reWrappedDataKey, metadata)
                     }

@@ -22,10 +22,7 @@ import software.amazon.awssdk.services.ssm.model.GetParameterResponse
 import software.amazon.awssdk.services.ssm.model.Parameter
 import software.amazon.awssdk.services.ssm.model.ParameterType
 import uk.gov.dwp.dataworks.egress.domain.EgressSpecification
-import uk.gov.dwp.dataworks.egress.services.CipherService
-import uk.gov.dwp.dataworks.egress.services.CompressionService
-import uk.gov.dwp.dataworks.egress.services.ControlFileService
-import uk.gov.dwp.dataworks.egress.services.DataKeyService
+import uk.gov.dwp.dataworks.egress.services.*
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.util.concurrent.CompletableFuture
@@ -66,6 +63,7 @@ class DataServiceImplTest : WordSpec() {
                 val assumedRoleS3Client = mock<S3AsyncClient>()
                 val assumedRoleSsmClient = mock<SsmClient>()
                 val controlFileService = mock<ControlFileService>()
+                val manifestFileService = mock<ManifestFileService>()
                 val assumedRoleS3ClientProvider: suspend (String) -> S3AsyncClient = { assumedRoleS3Client }
                 val assumedRoleSsmClientProvider: suspend (String) -> SsmClient = { assumedRoleSsmClient }
                 val dataKeyService = mock<DataKeyService> {
@@ -91,6 +89,7 @@ class DataServiceImplTest : WordSpec() {
                     assumedRoleS3ClientProvider,
                     assumedRoleSsmClientProvider,
                     controlFileService,
+                    manifestFileService,
                     dataKeyService,
                     cipherService,
                     compressionService,
@@ -195,6 +194,7 @@ class DataServiceImplTest : WordSpec() {
 
                 val ssmClient = mock<SsmClient> ()
                 val controlFileService = mock<ControlFileService>()
+                val manifestFileService = mock<ManifestFileService>()
 
                 val decryptingS3Client = mock<AmazonS3EncryptionV2>()
                 val assumedRoleS3Client = mock<S3AsyncClient> {
@@ -232,6 +232,7 @@ class DataServiceImplTest : WordSpec() {
                     assumedRoleS3ClientProvider,
                     assumedRoleSsmClientProvider,
                     controlFileService,
+                    manifestFileService,
                     dataKeyService,
                     cipherService,
                     compressionService,
@@ -336,6 +337,7 @@ class DataServiceImplTest : WordSpec() {
                 val dataKeyService = mock<DataKeyService>()
                 val cipherService = mock<CipherService>()
                 val controlFileService = mock<ControlFileService>()
+                val manifestFileService = mock<ManifestFileService>()
 
                 val compressionService = mock<CompressionService> {
                     on { compress(any(), any()) } doReturn "COMPRESSED_CONTENTS".toByteArray()
@@ -352,6 +354,7 @@ class DataServiceImplTest : WordSpec() {
                     assumedRoleS3ClientProvider,
                     assumedRoleSsmClientProvider,
                     controlFileService,
+                    manifestFileService,
                     dataKeyService,
                     cipherService,
                     compressionService,
@@ -432,6 +435,7 @@ class DataServiceImplTest : WordSpec() {
                 val sentFilesSuccessChild = mock<Counter.Child>()
                 given(sentFilesSuccess.labels(any(), any(), any(), any(), any())).willReturn(sentFilesSuccessChild)
                 val controlFileService = mock<ControlFileService>()
+                val manifestFileService = mock<ManifestFileService>()
 
                 val dataService = DataServiceImpl(
                     s3AsyncClient,
@@ -441,6 +445,7 @@ class DataServiceImplTest : WordSpec() {
                     assumedRoleS3ClientProvider,
                     assumedRoleSsmClientProvider,
                     controlFileService,
+                    manifestFileService,
                     dataKeyService,
                     cipherService,
                     compressionService,
@@ -526,6 +531,7 @@ class DataServiceImplTest : WordSpec() {
                 }
                 val compressionService = mock<CompressionService>()
                 val controlFileService = mock<ControlFileService>()
+                val manifestFileService = mock<ManifestFileService>()
 
                 val dataService = DataServiceImpl(
                     s3AsyncClient,
@@ -535,6 +541,7 @@ class DataServiceImplTest : WordSpec() {
                     assumedRoleS3ClientProvider,
                     assumedRoleSsmClientProvider,
                     controlFileService,
+                    manifestFileService,
                     dataKeyService,
                     cipherService,
                     compressionService,
