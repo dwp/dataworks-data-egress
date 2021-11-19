@@ -216,10 +216,10 @@ class ManifestFileServiceImplTest: StringSpec() {
     companion object {
         private const val OBJECT_SIZE = "ObjectSize".length.toLong()
         private const val TODAYS_YYYYMMDD_FORMATTED_DATE_PLACEHOLDER = "\$TODAYS_YYYYMMDD_FORMATTED_DATE"
-        private const val SOURCE_BUCKET = "sourceBucket"
-        private const val SOURCE_PREFIX = "sourcePrefix/"+TODAYS_YYYYMMDD_FORMATTED_DATE_PLACEHOLDER
+        private const val SOURCE_BUCKET = "sourceBucket/"
+        private const val SOURCE_PREFIX = "sourcePrefix"
         private const val DESTINATION_BUCKET = "destinationBucket"
-        private const val DESTINATION_PREFIX = "destinationPrefix"
+        private const val DESTINATION_PREFIX = "destinationPrefix/"+ TODAYS_YYYYMMDD_FORMATTED_DATE_PLACEHOLDER
         private const val TRANSFER_TYPE = "S3"
         private const val ROLE_ARN = "roleArn"
         private const val PIPELINE_NAME = "pipelineName"

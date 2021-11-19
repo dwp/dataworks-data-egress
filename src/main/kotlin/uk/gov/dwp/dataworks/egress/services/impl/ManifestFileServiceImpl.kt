@@ -86,13 +86,14 @@ class ManifestFileServiceImpl(private val s3AsyncClient: S3AsyncClient,
     private suspend fun targetContentsAndRequest(specification: EgressSpecification, targetKey:String): Pair<ByteArray, PutObjectRequest> {
 
         val sourcePrefix = specification.sourcePrefix
-        val todaysDate = if (sourcePrefix.contains(TODAYS_YYYYMMDD_FORMATTED_DATE_PLACEHOLDER)) todaysDate("yyyyMMdd")
+        val todaysDate = if (specification.destinationPrefix.contains(TODAYS_YYYYMMDD_FORMATTED_DATE_PLACEHOLDER)) todaysDate("yyyyMMdd")
                             else todaysDate()
 
         // DataProductType only applicable for HTME Collections, or anything containing full or incremental in source prefix, last - is removed
         val dataProductType = if (sourcePrefix.lowercase().contains("full")) "full"
                                 else if (sourcePrefix.lowercase().contains("incremental")) "incremental"
                                 else ""
+
         // DataProduct is name of HTME Collections, taken from source prefix and last - is removed if present
         val dataProduct = sourcePrefix.substring(sourcePrefix.lastIndexOf('/')+1).replace("-$".toRegex(),"")
 
@@ -187,11 +188,7 @@ class ManifestFileServiceImpl(private val s3AsyncClient: S3AsyncClient,
     }
 
     private suspend fun rtgSsmClient(specification: EgressSpecification): SsmClient =
-        specification.roleArn?.let {
-            assumedRoleSsmClientProvider(specification.roleArn)
-        } ?: run {
-            ssmClient
-        }
+         if (specification.roleArn.isNullOrBlank()) ssmClient else  assumedRoleSsmClientProvider(specification.roleArn)
 
     companion object {
         private val logger = DataworksLogger.getLogger(ManifestFileServiceImpl::class)
