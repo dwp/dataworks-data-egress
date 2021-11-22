@@ -218,7 +218,7 @@ class DataServiceImpl(
         }
 
     private suspend fun rtgSsmClient(specification: EgressSpecification): SsmClient =
-        if (specification.roleArn.isNullOrBlank()) ssmClient else  assumedRoleSsmClientProvider(specification.roleArn)
+        if (specification.roleArn.isNullOrEmpty()) ssmClient else  assumedRoleSsmClientProvider(specification.roleArn)
 
     private fun targetContents(
         specification: EgressSpecification,

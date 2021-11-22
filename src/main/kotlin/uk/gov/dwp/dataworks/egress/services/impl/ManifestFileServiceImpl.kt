@@ -15,6 +15,7 @@ import software.amazon.awssdk.services.ssm.model.SsmException
 import uk.gov.dwp.dataworks.egress.domain.EgressSpecification
 import uk.gov.dwp.dataworks.egress.domain.ReWrapKeyParameterStoreResult
 import uk.gov.dwp.dataworks.egress.services.CipherService
+import uk.gov.dwp.dataworks.egress.services.CompressionService
 import uk.gov.dwp.dataworks.egress.services.DataKeyService
 import uk.gov.dwp.dataworks.egress.services.ManifestFileService
 import uk.gov.dwp.dataworks.egress.utility.FileUtility.writeToFile
@@ -27,6 +28,7 @@ import java.util.*
 class ManifestFileServiceImpl(private val s3AsyncClient: S3AsyncClient,
                               private val dataKeyService: DataKeyService,
                               private val cipherService: CipherService,
+                              private val compressionService: CompressionService,
                               private val ssmClient: SsmClient,
                               private val assumedRoleSsmClientProvider: suspend (String) -> SsmClient,
                               assumedRoleS3ClientProvider: suspend (String) -> S3AsyncClient): ManifestFileService,
@@ -36,11 +38,12 @@ class ManifestFileServiceImpl(private val s3AsyncClient: S3AsyncClient,
         val manifestFileName = specification.manifestFileName?: ""
         return try {
             if (manifestFileName.isNotBlank()) {
-                val targetKey = targetKey(specification, manifestFileName.replace(TODAYS_YYYYMMDD_FORMATTED_DATE_PLACEHOLDER, todaysDate("yyyyMMdd")).
-                replace(TODAYS_DATE_PLACEHOLDER, todaysDate()))
-                logger.info("Got manifest target key",
+                val targetKey = manifestFileTargetKey(specification)
+                logger.info(
+                    "Got manifest target key",
                     "specification" to "$specification",
-                    "target_key" to targetKey)
+                    "target_key" to targetKey
+                )
 
                 val (targetContents, putRequest) = targetContentsAndRequest(specification, targetKey)
                 logger.info("Got manifest target contents", "specification" to "$specification")
@@ -48,25 +51,33 @@ class ManifestFileServiceImpl(private val s3AsyncClient: S3AsyncClient,
                 when (specification.transferType) {
                     "S3" -> {
 
-                        logger.info("Transferring manifest file to s3",
+                        logger.info(
+                            "Transferring manifest file to s3",
                             "specification" to "$specification",
-                            "target_key" to targetKey)
+                            "target_key" to targetKey
+                        )
 
                         egressClient(specification).putObject(putRequest, AsyncRequestBody.fromBytes(targetContents))
                             .await()
-                        logger.info("Transferred manifest file to s3",
+                        logger.info(
+                            "Transferred manifest file to s3",
                             "target_key" to targetKey,
-                            "specification" to "$specification")
+                            "specification" to "$specification"
+                        )
                         Pair(targetKey, true)
                     }
                     "SFT" -> {
-                        logger.info("Transferring manifest contents to file",
+                        logger.info(
+                            "Transferring manifest contents to file",
                             "target_key" to targetKey,
-                            "specification" to "$specification")
+                            "specification" to "$specification"
+                        )
                         writeToFile(File(targetKey).name, specification.destinationPrefix, targetContents)
-                        logger.info("Transferred manifest contents to file",
+                        logger.info(
+                            "Transferred manifest contents to file",
                             "target_key" to targetKey,
-                            "specification" to "$specification")
+                            "specification" to "$specification"
+                        )
                         Pair(targetKey, true)
                     }
                     else -> {
@@ -80,6 +91,25 @@ class ManifestFileServiceImpl(private val s3AsyncClient: S3AsyncClient,
         } catch (e: Exception) {
             logger.error("Failed to egress manifest object", e, "specification" to "$specification")
             Pair(manifestFileName, false)
+        }
+    }
+
+    private fun manifestFileTargetKey(specifications:EgressSpecification): String
+    {
+        val manifestFileName = specifications.manifestFileName?: ""
+        val baseTargetKey = targetKey(
+            specifications,
+            manifestFileName.replace(TODAYS_YYYYMMDD_FORMATTED_DATE_PLACEHOLDER, todaysDate("yyyyMMdd"))
+                .replace(TODAYS_DATE_PLACEHOLDER, todaysDate())
+        ) + ".gz"
+
+        return when (specifications.manifestFileEncryption?.let{it.lowercase()}) {
+            "encrypted", "re-wrapped", "rewrapped"  -> {
+                baseTargetKey + ".enc"
+            }
+            else -> {
+                baseTargetKey
+            }
         }
     }
 
@@ -115,7 +145,9 @@ class ManifestFileServiceImpl(private val s3AsyncClient: S3AsyncClient,
             }
             .toList()                                                         // Make list of strings containing target key
             .joinToString( separator = "") { it }                             // Convert that list to String
-            .toByteArray()
+            .toByteArray().run { this
+                compressionService.compress("gz", this)
+            }
 
 
         return when (specification.manifestFileEncryption?.let{it.lowercase()}) {
@@ -188,7 +220,7 @@ class ManifestFileServiceImpl(private val s3AsyncClient: S3AsyncClient,
     }
 
     private suspend fun rtgSsmClient(specification: EgressSpecification): SsmClient =
-         if (specification.roleArn.isNullOrBlank()) ssmClient else  assumedRoleSsmClientProvider(specification.roleArn)
+         if (specification.roleArn.isNullOrEmpty()) ssmClient else  assumedRoleSsmClientProvider(specification.roleArn)
 
     companion object {
         private val logger = DataworksLogger.getLogger(ManifestFileServiceImpl::class)

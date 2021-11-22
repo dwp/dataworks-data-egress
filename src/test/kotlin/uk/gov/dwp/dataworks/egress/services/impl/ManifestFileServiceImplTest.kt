@@ -18,6 +18,7 @@ import uk.gov.dwp.dataworks.egress.domain.DataKeyResult
 import uk.gov.dwp.dataworks.egress.domain.EgressSpecification
 import uk.gov.dwp.dataworks.egress.domain.EncryptionResult
 import uk.gov.dwp.dataworks.egress.services.CipherService
+import uk.gov.dwp.dataworks.egress.services.CompressionService
 import uk.gov.dwp.dataworks.egress.services.DataKeyService
 import java.io.File
 import java.text.DecimalFormat
@@ -31,13 +32,13 @@ class ManifestFileServiceImplTest: StringSpec() {
             "Export manifest file as plain text if no manifestFileEncryption option provided" {
                 val (asyncS3Client, assumedRoleS3Client, manifestFileService) = serviceAndItsClients()
                 manifestFileService.egressManifestFile(egressSpecification(manifestFileName=MANIFEST_FILE_NAME))
-                verifyInteractions(assumedRoleS3Client, asyncS3Client, "$DESTINATION_PREFIX/$MANIFEST_FILE_NAME")
+                verifyInteractions(assumedRoleS3Client, asyncS3Client, "$DESTINATION_PREFIX/$MANIFEST_FILE_NAME.gz")
             }
 
             "Export encrypted manifest file when manifestFileEncryption option 'encrypted' provided" {
                 val (asyncS3Client, assumedRoleS3Client, manifestFileService) = serviceAndItsClients()
                 manifestFileService.egressManifestFile(egressSpecification(manifestFileName=MANIFEST_FILE_NAME, manifestFileEncryption="encrypted"))
-                verifyInteractions(assumedRoleS3Client, asyncS3Client, "$DESTINATION_PREFIX/$MANIFEST_FILE_NAME")
+                verifyInteractions(assumedRoleS3Client, asyncS3Client, "$DESTINATION_PREFIX/$MANIFEST_FILE_NAME.gz.enc")
             }
 
             "Export encrypted manifest file with re-wrapped data key when 're-wrapped' is set as manifestFileEncryption option" {
@@ -45,7 +46,7 @@ class ManifestFileServiceImplTest: StringSpec() {
                 manifestFileService.egressManifestFile(
                     egressSpecification(manifestFileName=MANIFEST_FILE_NAME,
                                         manifestFileEncryption="re-wrapped", roleArn = ROLE_ARN))
-                verifyInteractions(assumedRoleS3Client, asyncS3Client, "$DESTINATION_PREFIX/$MANIFEST_FILE_NAME", ROLE_ARN)
+                verifyInteractions(assumedRoleS3Client, asyncS3Client, "$DESTINATION_PREFIX/$MANIFEST_FILE_NAME.gz.enc", ROLE_ARN)
 
             }
 
@@ -54,7 +55,7 @@ class ManifestFileServiceImplTest: StringSpec() {
                 manifestFileService.egressManifestFile(
                     egressSpecification(manifestFileName=MANIFEST_FILE_NAME,
                         manifestFileEncryption="re-wrapped", roleArn = ROLE_ARN))
-                verifyInteractions(assumedRoleS3Client, asyncS3Client, "$DESTINATION_PREFIX/$MANIFEST_FILE_NAME", ROLE_ARN)
+                verifyInteractions(assumedRoleS3Client, asyncS3Client, "$DESTINATION_PREFIX/$MANIFEST_FILE_NAME.gz.enc", ROLE_ARN)
 
             }
 
@@ -68,7 +69,13 @@ class ManifestFileServiceImplTest: StringSpec() {
             "Export manifest file using assumed role if asked" {
                 val (asyncS3Client, assumedRoleS3Client, manifestFileService) = serviceAndItsClients()
                 manifestFileService.egressManifestFile(egressSpecification(manifestFileName=MANIFEST_FILE_NAME, roleArn = ROLE_ARN))
-                verifyInteractions(assumedRoleS3Client, asyncS3Client, "$DESTINATION_PREFIX/$MANIFEST_FILE_NAME", ROLE_ARN)
+                verifyInteractions(assumedRoleS3Client, asyncS3Client, "$DESTINATION_PREFIX/$MANIFEST_FILE_NAME.gz", ROLE_ARN)
+            }
+
+            "Do not assume role when role_arn is empty in specifications" {
+                val (asyncS3Client, assumedRoleS3Client, manifestFileService) = serviceAndItsClients()
+                manifestFileService.egressManifestFile(egressSpecification(manifestFileName=MANIFEST_FILE_NAME, roleArn = ""))
+                verifyInteractions(assumedRoleS3Client, asyncS3Client, "$DESTINATION_PREFIX/$MANIFEST_FILE_NAME.gz", "")
             }
 
     }
@@ -94,7 +101,10 @@ class ManifestFileServiceImplTest: StringSpec() {
         }
         val assumedRoleSsmClientProvider: suspend (String) -> SsmClient = { assumedRoleSsmClient }
         val assumedRoleS3ClientProvider: suspend (String) -> S3AsyncClient = { assumedRoleS3Client }
-        val manifestFileService = ManifestFileServiceImpl(asyncS3Client, dataKeyService, cipherService, ssmClient,
+        val compressionService = mock<CompressionService>{
+            on { compress(any(), any())} doReturn getManifestFileContents().toByteArray()
+        }
+        val manifestFileService = ManifestFileServiceImpl(asyncS3Client, dataKeyService, cipherService, compressionService, ssmClient,
             assumedRoleSsmClientProvider, assumedRoleS3ClientProvider)
 
         return Triple(asyncS3Client, assumedRoleS3Client, manifestFileService)
@@ -154,7 +164,7 @@ class ManifestFileServiceImplTest: StringSpec() {
 
         argumentCaptor<PutObjectRequest> {
             val bodyCaptor = argumentCaptor<AsyncRequestBody>()
-            if (roleArn.isNullOrBlank())  verify(asyncS3Client, times(1)).putObject(capture(), bodyCaptor.capture())  else
+            if (roleArn.isNullOrEmpty())  verify(asyncS3Client, times(1)).putObject(capture(), bodyCaptor.capture())  else
             verify(assumedRoleS3Client, times(1)).putObject(capture(), bodyCaptor.capture())
 
             firstValue.run {
@@ -195,7 +205,7 @@ class ManifestFileServiceImplTest: StringSpec() {
             encryptingKeySsmParmName = SSM_PARAM_NAME,
             compress = false,
             compressionFormat = null,
-            roleArn,
+            roleArn= roleArn,
             PIPELINE_NAME,
             RECIPIENT,
             timestampOutput = false,
