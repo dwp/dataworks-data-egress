@@ -37,11 +37,6 @@ open class EgressServiceImpl(
     }
 
     suspend fun egressClient(specification: EgressSpecification): S3AsyncClient =
-        specification.roleArn?.let {
-            assumedRoleS3ClientProvider(specification.roleArn)
-        } ?: run {
-            s3AsyncClient
-        }
-
+        if (specification.roleArn.isNullOrEmpty()) s3AsyncClient else  assumedRoleS3ClientProvider(specification.roleArn)
 
 }
