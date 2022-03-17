@@ -195,6 +195,9 @@ class ManifestFileServiceImpl(private val s3AsyncClient: S3AsyncClient,
                     bucket(specification.destinationBucket)
                     acl(ObjectCannedACL.BUCKET_OWNER_FULL_CONTROL)
                     key(targetKey)
+                    metadata(mapOf(
+                        DATA_PRODUCT to dataProduct,
+                        DATA_PRODUCT_TYPE to dataProductType))
                     build()
                 }
                 Pair(contents, putRequestObj)
