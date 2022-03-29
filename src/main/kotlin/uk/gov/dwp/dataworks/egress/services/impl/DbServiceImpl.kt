@@ -34,7 +34,8 @@ class DbServiceImpl(private val dynamoDb: DynamoDbAsyncClient,
                 todaysDate()).replace(Regex("""\*$"""), ""),
             destinationBucket = attributeStringValue(dynamoDbRecord, DESTINATION_BUCKET_COLUMN),
             destinationPrefix = attributeStringValue(dynamoDbRecord, DESTINATION_PREFIX_COLUMN).replace(TODAYS_DATE_PLACEHOLDER,
-                todaysDate()).replace(TODAYS_YYYYMMDD_FORMATTED_DATE_PLACEHOLDER, todaysDate("yyyyMMdd")),
+                todaysDate()).replace(TODAYS_YYYYMMDD_FORMATTED_DATE_PLACEHOLDER,
+                todaysDate("yyyyMMdd")).replace(TODAYS_YYYYMMDD_HHMMSS_FORMATTED_DATE_PLACEHOLDER, todaysDate("yyyyMMdd_HHmmss")),
             transferType = attributeStringValue(dynamoDbRecord, TRANSFER_TYPE_COLUMN),
             decrypt = dynamoDbRecord[DECRYPT_COLUMN]?.bool() ?: false,
             rewrapDataKey = dynamoDbRecord[REWRAP_DATAKEY_COLUMN]?.bool() ?: false,
@@ -95,6 +96,7 @@ class DbServiceImpl(private val dynamoDb: DynamoDbAsyncClient,
         private const val TIMESTAMP_OUTPUT_COLUMN: String = "timestamp_files"
         private const val TODAYS_DATE_PLACEHOLDER = "\$TODAYS_DATE"
         private const val TODAYS_YYYYMMDD_FORMATTED_DATE_PLACEHOLDER = "\$TODAYS_YYYYMMDD_FORMATTED_DATE"
+        private const val TODAYS_YYYYMMDD_HHMMSS_FORMATTED_DATE_PLACEHOLDER = "\$TODAYS_YYYYMMDD_HHMMSS_FORMATTED_DATE"
         private const val PIPELINE_COLUMN = "pipeline_name"
         private const val RECIPIENT_COLUMN = "recipient_name"
     }

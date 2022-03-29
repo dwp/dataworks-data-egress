@@ -100,6 +100,7 @@ class ManifestFileServiceImpl(private val s3AsyncClient: S3AsyncClient,
         val baseTargetKey = targetKey(
             specifications,
             manifestFileName.replace(TODAYS_YYYYMMDD_FORMATTED_DATE_PLACEHOLDER, todaysDate("yyyyMMdd"))
+                .replace(TODAYS_YYYYMMDD_HHMMSS_FORMATTED_DATE_PLACEHOLDER, todaysDate("yyyyMMdd_HHmmss"))
                 .replace(TODAYS_DATE_PLACEHOLDER, todaysDate())
         ) + ".gz"
 
@@ -117,6 +118,7 @@ class ManifestFileServiceImpl(private val s3AsyncClient: S3AsyncClient,
 
         val sourcePrefix = specification.sourcePrefix
         val todaysDate = if (specification.destinationPrefix.contains(TODAYS_YYYYMMDD_FORMATTED_DATE_PLACEHOLDER)) todaysDate("yyyyMMdd")
+                            else if (specification.destinationPrefix.contains(TODAYS_YYYYMMDD_HHMMSS_FORMATTED_DATE_PLACEHOLDER)) todaysDate("yyyyMMdd_HHmmss")
                             else todaysDate()
 
         // DataProductType only applicable for HTME Collections, or anything containing full or incremental in source prefix, last - is removed
@@ -229,6 +231,7 @@ class ManifestFileServiceImpl(private val s3AsyncClient: S3AsyncClient,
         private val logger = DataworksLogger.getLogger(ManifestFileServiceImpl::class)
         private const val TODAYS_DATE_PLACEHOLDER = "\$TODAYS_DATE"
         private const val TODAYS_YYYYMMDD_FORMATTED_DATE_PLACEHOLDER = "\$TODAYS_YYYYMMDD_FORMATTED_DATE"
+        private const val TODAYS_YYYYMMDD_HHMMSS_FORMATTED_DATE_PLACEHOLDER = "\$TODAYS_YYYYMMDD_HHMMSS_FORMATTED_DATE"
 
         private const val ENCRYPTING_KEY_ID_METADATA_KEY = "datakeyencryptionkeyid"
         private const val INITIALISATION_VECTOR_METADATA_KEY = "iv"
