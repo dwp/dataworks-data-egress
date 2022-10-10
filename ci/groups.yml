@@ -1,10 +1,4 @@
 groups:
-  - name: master
-    jobs:
-      - management-dev
-  - name: pull-request
-    jobs:
-      - dataworks-data-egress-pr
   - name: mirror
     jobs:
       - mirror-dwpdigital-dataworks-data-egress-dev
