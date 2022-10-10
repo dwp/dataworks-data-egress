@@ -2,7 +2,6 @@ groups:
   - name: master
     jobs:
       - management-dev
-      - management
   - name: pull-request
     jobs:
       - dataworks-data-egress-pr
