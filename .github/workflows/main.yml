@@ -79,7 +79,7 @@ jobs:
       - name: generate developer certificates
         run: make certificates
       - name: Publish to DockerHub
-        uses: elgohr/Publish-Docker-Github-Action@master
+        uses: elgohr/Publish-Docker-Github-Action@v5
         with:
           name: ${{ env.IMAGE_NAME }}
           username: ${{ secrets.DOCKERHUB_USERNAME }}
