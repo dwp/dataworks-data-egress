@@ -6,4 +6,6 @@ groups:
   - name: update-pipeline
     jobs:
       - update-pipeline
-      
+  - name: docker-build
+    jobs:
+      - build-docker-image

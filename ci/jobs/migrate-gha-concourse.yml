@@ -1,0 +1,6 @@
+jobs:
+  - name: build-docker-image
+    serial_groups: [docker-build-data-egress]
+    plan:
+      - get: dataworks-data-egress-
+        trigger: true
