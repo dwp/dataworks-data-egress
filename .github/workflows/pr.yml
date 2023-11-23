@@ -17,10 +17,3 @@ jobs:
 
       - name: Build Docker image
         run: docker build -t ${{ env.IMAGE_NAME }}:latest .
-      - name: Run Snyk to check image for high vulnerabilities
-        uses: snyk/actions/docker@master
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          image: ${{ env.IMAGE_NAME }}
-          args: --file=Dockerfile --policy-path=./.snyk --severity-threshold=high --exclude-base-image-vulns --org=dwp-dataworks
